@@ -1,0 +1,73 @@
+# VLM-Patrol Configuration
+
+# LLM API (OpenAI-compatible format)
+llm:
+  url: "http://localhost:11434/v1/chat/completions"   # Ollama default
+  model: "qwen3-vl:8b"
+  # url: "https://integrate.api.nvidia.com/v1/chat/completions"  # NVIDIA cloud
+  # model: "meta/llama-4-maverick-17b-128e-instruct"
+
+# Camera image source
+camera:
+  snapshot_url: "http://192.168.1.100/snapshot"   # Any URL that returns JPEG
+  stream_url: ""                                   # Optional: MJPEG/WebRTC stream for frontend
+  # PTZ control (optional — leave empty if fixed camera)
+  ptz:
+    enabled: false
+    url: "http://192.168.1.100"
+    fov_h_deg: 55
+    fov_v_deg: 32
+    image_width: 1920
+    image_height: 1080
+    home_az: 2800
+    home_el: 350
+    wide_zoom: 10
+    close_zoom: 25
+
+# Sensor data source (optional)
+sensor:
+  url: ""              # HTTP endpoint returning JSON, or leave empty
+  mqtt:
+    enabled: false
+    broker: "localhost"
+    port: 1883
+    topics:
+      - "greenhouse/sensors"
+
+# Actuator control (optional — HTTP endpoint that receives care commands)
+# The endpoint receives POST JSON: {"action": "water", "enable": true, "duration_sec": 300}
+# Can be: Arduino/ESP32 HTTP server, Raspberry Pi, PLC gateway, etc.
+actuator:
+  url: ""              # e.g. http://192.168.1.200/control
+
+# YOLO detection
+yolo:
+  model_path: ""       # Path to .pt weights, empty = auto-download yolo11s.pt
+  data_dir: "./data"   # Where to store collected images and labels
+  auto_train: true     # Trigger training when dataset grows
+  train_threshold: 50  # Min images before first training
+
+# Plant species (customize for your greenhouse)
+classes:
+  - "strawberry"
+  - "celery"
+  - "chive"
+  - "coriander"
+  - "rose"
+  - "blueberry"
+
+# Auto patrol schedule
+patrol:
+  enabled: false
+  interval_minutes: 60
+  strategy: "single"   # single (one snapshot), sweep (if PTZ available)
+
+# Auto analysis
+agent:
+  auto_analysis: false
+  interval_minutes: 30
+
+# Server
+server:
+  host: "0.0.0.0"
+  port: 8765

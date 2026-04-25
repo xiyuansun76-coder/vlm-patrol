@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLM-Patrol</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="logo">🌱 VLM-Patrol</div>
+    <a href="#" class="nav-item active" data-page="dashboard">Dashboard</a>
+    <a href="#" class="nav-item" data-page="camera">Camera</a>
+    <a href="#" class="nav-item" data-page="chat">Agent</a>
+    <a href="#" class="nav-item" data-page="settings">Settings</a>
+    <div class="nav-footer">
+      <span id="ws-status" class="status-dot offline"></span>
+      <span class="status-text">Disconnected</span>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main id="content">
+
+    <!-- Dashboard -->
+    <section id="page-dashboard" class="page active">
+      <h1>Dashboard</h1>
+      <div class="cards">
+        <div class="card">
+          <div class="card-title">Health Score</div>
+          <div class="card-value" id="health-score">--</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Plants Detected</div>
+          <div class="card-value" id="plants-count">--</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Dataset Size</div>
+          <div class="card-value" id="dataset-size">--</div>
+        </div>
+        <div class="card">
+          <div class="card-title">YOLO Model</div>
+          <div class="card-value card-value-sm" id="yolo-model">--</div>
+        </div>
+      </div>
+
+      <div class="section-row">
+        <div class="section-block">
+          <h2>Quick Actions</h2>
+          <div class="btn-group">
+            <button class="btn" onclick="runPatrol()">Run Patrol</button>
+            <button class="btn" onclick="runAnalysis()">Analyze Now</button>
+            <button class="btn btn-secondary" onclick="refreshDashboard()">Refresh</button>
+          </div>
+        </div>
+        <div class="section-block">
+          <h2>Latest Analysis</h2>
+          <div id="latest-analysis" class="info-box">No analysis yet</div>
+        </div>
+      </div>
+
+      <div class="section-block">
+        <h2>Recent Patrol</h2>
+        <div id="patrol-result" class="info-box">No patrol data</div>
+      </div>
+    </section>
+
+    <!-- Camera -->
+    <section id="page-camera" class="page">
+      <h1>Camera</h1>
+      <div class="camera-container">
+        <div class="camera-feed">
+          <img id="camera-img" src="" alt="Camera feed" style="display:none">
+          <div id="camera-placeholder" class="placeholder">No camera configured.<br>Set snapshot_url in config.yaml</div>
+        </div>
+        <div class="camera-controls">
+          <h3>Controls</h3>
+          <button class="btn" onclick="captureSnapshot()">Snapshot</button>
+          <button class="btn" onclick="detectFromCamera()">VLM Detect</button>
+          <button class="btn" onclick="diagnoseFromCamera()">Diagnose</button>
+          <h3>Detections</h3>
+          <div id="detection-results" class="info-box">Click Detect to start</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chat / Agent -->
+    <section id="page-chat" class="page">
+      <h1>Agent</h1>
+      <div class="agent-controls">
+        <label><input type="checkbox" id="auto-analysis-toggle" onchange="toggleAutoAnalysis()"> Auto Analysis</label>
+        <label><input type="checkbox" id="auto-care-toggle" onchange="toggleAutoCare()"> Auto Care</label>
+        <span id="agent-status-text" class="status-text">Stopped</span>
+      </div>
+      <div id="chat-messages" class="chat-box"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Ask the agent..." onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="btn" onclick="sendChat()">Send</button>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="page-settings" class="page">
+      <h1>Settings</h1>
+      <div class="settings-form">
+        <h2>LLM API</h2>
+        <label>URL <input type="text" id="cfg-llm-url"></label>
+        <label>Model <input type="text" id="cfg-llm-model"></label>
+        <label>API Key <input type="password" id="cfg-llm-key" placeholder="Leave empty for local Ollama"></label>
+
+        <h2>Camera</h2>
+        <label>Snapshot URL <input type="text" id="cfg-camera-url" placeholder="http://192.168.1.100/snapshot"></label>
+        <label>Stream URL <input type="text" id="cfg-stream-url" placeholder="Optional: MJPEG stream for live view"></label>
+
+        <h2>Sensor</h2>
+        <label>Sensor Data URL <input type="text" id="cfg-sensor-url" placeholder="Optional: HTTP endpoint returning JSON"></label>
+
+        <h2>Actuator Control</h2>
+        <label>Actuator URL <input type="text" id="cfg-actuator-url" placeholder="Optional: e.g. http://192.168.1.200/control"></label>
+        <p class="hint">Receives POST {"action":"water","enable":true,"duration_sec":300}. Can be Arduino, RPi, PLC, etc.</p>
+
+        <h2>Plant Classes</h2>
+        <div class="classes-editor">
+          <div id="cfg-classes" class="tag-list"></div>
+          <div class="classes-input-row">
+            <input type="text" id="cfg-class-input" placeholder="Add species name...">
+            <button class="btn btn-sm" onclick="addClass()">Add</button>
+          </div>
+        </div>
+
+        <h2>YOLO</h2>
+        <label>Model Path <input type="text" id="cfg-yolo-path" placeholder="Empty = auto-download yolo11s.pt"></label>
+        <label>Data Directory <input type="text" id="cfg-yolo-datadir" placeholder="./data"></label>
+        <label>
+          <input type="checkbox" id="cfg-yolo-autotrain"> Auto-train when dataset reaches
+          <input type="number" id="cfg-yolo-threshold" style="width:60px" min="10" value="50"> images
+        </label>
+
+        <h2>Patrol</h2>
+        <label>
+          <input type="checkbox" id="cfg-patrol-enabled"> Enable auto patrol every
+          <input type="number" id="cfg-patrol-interval" style="width:60px" min="1" value="60"> minutes
+        </label>
+
+        <h2>Agent</h2>
+        <label>
+          <input type="checkbox" id="cfg-agent-enabled"> Enable auto analysis every
+          <input type="number" id="cfg-agent-interval" style="width:60px" min="1" value="30"> minutes
+        </label>
+
+        <h2>Server</h2>
+        <label>Host <input type="text" id="cfg-server-host" value="0.0.0.0"></label>
+        <label>Port <input type="number" id="cfg-server-port" value="8765"></label>
+
+        <div class="btn-group" style="margin-top:16px">
+          <button class="btn" onclick="saveConfig()">Save & Apply</button>
+          <button class="btn btn-secondary" onclick="refreshDashboard()">Reset</button>
+        </div>
+        <div id="save-status" class="hint"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
