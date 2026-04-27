@@ -15,6 +15,7 @@ from vlm_patrol.vlm import VLM
 from vlm_patrol.yolo import YOLOManager
 from vlm_patrol.patrol import Patrol
 from vlm_patrol.agent import Agent
+from vlm_patrol.setup_assistant import handle_setup_message
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 log = logging.getLogger("vlm-patrol")
@@ -219,6 +220,66 @@ async def vlm_ask(prompt: str, file: UploadFile = File(None)):
     image = await file.read() if file else None
     result = await vlm.ask(prompt, image)
     return {"response": result}
+
+
+# ── Chat API (setup assistant + VLM fallback) ──
+
+def _save_config_to_yaml():
+    """Save current cfg state to config.yaml."""
+    import yaml
+    yaml_data = {
+        "llm": {"url": cfg.llm_url, "model": cfg.llm_model},
+        "camera": {
+            "snapshot_url": cfg.camera_snapshot_url,
+            "stream_url": cfg.camera_stream_url,
+            "ptz": {
+                "enabled": cfg.ptz_enabled, "url": cfg.ptz_url,
+                "fov_h_deg": cfg.ptz_fov_h, "fov_v_deg": cfg.ptz_fov_v,
+                "image_width": cfg.ptz_img_w, "image_height": cfg.ptz_img_h,
+                "home_az": cfg.ptz_home_az, "home_el": cfg.ptz_home_el,
+                "wide_zoom": cfg.ptz_wide_zoom, "close_zoom": cfg.ptz_close_zoom,
+            },
+        },
+        "sensor": {"url": cfg.sensor_url},
+        "actuator": {"url": cfg.actuator_url},
+        "classes": cfg.classes,
+        "yolo": {
+            "model_path": cfg.yolo_model_path, "data_dir": str(cfg.yolo_data_dir),
+            "auto_train": cfg.yolo_auto_train, "train_threshold": cfg.yolo_train_threshold,
+        },
+        "patrol": {
+            "enabled": cfg.patrol_enabled, "interval_minutes": cfg.patrol_interval,
+            "strategy": cfg.patrol_strategy,
+        },
+        "agent": {
+            "auto_analysis": cfg.agent_auto_analysis, "interval_minutes": cfg.agent_interval,
+        },
+        "server": {"host": cfg.server_host, "port": cfg.server_port},
+    }
+    config_path = Path(__file__).parent / "config.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(yaml_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    log.info("Config saved via setup assistant")
+
+
+@app.post("/api/chat")
+async def chat(data: dict):
+    """Chat endpoint: setup assistant first, then VLM fallback."""
+    message = data.get("message", "").strip()
+    if not message:
+        return {"role": "system", "text": "Please enter a message."}
+
+    # Try setup assistant first
+    setup_response = await handle_setup_message(message, cfg, _save_config_to_yaml)
+    if setup_response:
+        return {"role": "assistant", "text": setup_response, "is_setup": True}
+
+    # Fallback to VLM general query
+    try:
+        result = await vlm.ask(message)
+        return {"role": "agent", "text": result, "is_setup": False}
+    except Exception as e:
+        return {"role": "system", "text": f"LLM error: {e}", "is_setup": False}
 
 
 # ── Config API ──

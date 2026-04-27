@@ -183,8 +183,10 @@ async function sendChat() {
 
   addChatMessage('user', text);
   try {
-    const result = await apiPost('/api/vlm/ask?prompt=' + encodeURIComponent(text));
-    addChatMessage('agent', result.response);
+    const result = await apiPost('/api/chat', { message: text });
+    addChatMessage(result.role || 'agent', result.text, result.commands || []);
+    // If setup assistant changed config, refresh dashboard to reflect changes
+    if (result.is_setup) refreshDashboard();
   } catch (e) {
     addChatMessage('system', 'Error: ' + e.message);
   }
