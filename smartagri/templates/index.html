@@ -1288,7 +1288,7 @@ function setView(v) {
   if (v === 'soil' && !soilChartInited) { initSoilCharts(); soilChartInited = true; }
   if (v === 'atm'  && !atmChartInited)  { initAtmChart();   atmChartInited  = true; }
   if (v === 'history') loadHistoryLogs();
-  if (v === 'camera')  loadCameraGallery();
+  if (v === 'camera')  { loadCameraGallery(); loadSettingsFromAPI(); }
   if (v === 'patrol')  loadPatrolHistory();
   if (v === 'livecam') startHikCam(); else stopHikCam();
 }
@@ -2147,6 +2147,13 @@ const VLP = '/api';
 
 
 // ── Settings load/save ──
+async function loadSettingsFromAPI() {
+  try {
+    const r = await fetch(VLP + '/config');
+    if (r.ok) { const cfg = await r.json(); vlpLoadSettings(cfg); }
+  } catch(e) { console.warn('Failed to load settings:', e); }
+}
+
 function vlpLoadSettings(cfg) {
   if (!cfg) return;
   const s = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
