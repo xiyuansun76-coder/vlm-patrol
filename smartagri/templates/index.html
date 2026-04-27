@@ -1700,6 +1700,10 @@ async function startHikStream() {
   stopHikStream();
   const video = document.getElementById('hik-video');
 
+  // Skip WebRTC (requires go2rtc), go straight to snapshot polling
+  _startMjpegFallback();
+  return;
+
   try {
     const pc = new RTCPeerConnection();
     _pc = pc;
@@ -1738,7 +1742,7 @@ async function startHikStream() {
 
 function _startMjpegFallback() {
   const img = document.getElementById('hik-img');
-  const MJPEG_URL = '/api/hik/frame.jpeg?src=hik_ptz';
+  const MJPEG_URL = '/api/ptz/snapshot';
   img.style.display = 'block';
   document.getElementById('hik-video').style.display = 'none';
   img.onload = () => _setStatus(true);
