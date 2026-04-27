@@ -1699,22 +1699,44 @@ function _setStatus(connected) {
 async function startHikStream() {
   stopHikStream();
   const video = document.getElementById('hik-video');
+  const img = document.getElementById('hik-img');
+  const overlay = document.getElementById('hik-overlay');
 
-  // Try snapshot first to check if camera is reachable
+  // 1. Check if camera is reachable at all
   try {
     const testResp = await fetch('/api/ptz/snapshot');
-    if (testResp.ok) {
-      _startMjpegFallback();
+    if (!testResp.ok) throw new Error('no camera');
+  } catch(_) {
+    // No camera — show unavailable
+    _setStatus(false);
+    overlay.style.display = 'flex';
+    overlay.innerHTML =
+      '<span class="material-symbols-outlined text-neutral-500" style="font-size:36px">videocam_off</span>' +
+      '<span class="text-neutral-500 text-xs">实时监控不可用 — 请在设置页配置摄像头</span>';
+    return;
+  }
+
+  // 2. Try MJPEG stream (real-time ~3fps)
+  img.style.display = 'block';
+  video.style.display = 'none';
+  overlay.style.display = 'none';
+  img.src = '/api/ptz/stream?t=' + Date.now();
+  img.onload = () => { _setStatus(true); window._hikStreamOk = true; };
+  img.onerror = () => {
+    if (window._hikStreamOk) {
+      // Stream was working but broke — try reconnect
+      window._hikStreamOk = false;
+      setTimeout(startHikStream, 3000);
       return;
     }
-  } catch(_) {}
-
-  // Camera not available
-  _setStatus(false);
-  document.getElementById('hik-overlay').style.display = 'flex';
-  document.getElementById('hik-overlay').innerHTML =
-    '<span class="material-symbols-outlined text-neutral-500" style="font-size:36px">videocam_off</span>' +
-    '<span class="text-neutral-500 text-xs">实时监控不可用 — 请在设置页配置摄像头</span>';
+    // Stream not supported — fall back to 1fps snapshot polling
+    console.log('MJPEG stream not available, falling back to snapshot polling');
+    _startSnapshotPolling();
+  };
+  // If stream doesn't produce a frame in 5s, fall back
+  setTimeout(() => {
+    if (!window._hikStreamOk) _startSnapshotPolling();
+  }, 5000);
   return;
 
   try {
@@ -1753,33 +1775,35 @@ async function startHikStream() {
   }
 }
 
-function _startMjpegFallback() {
+function _startSnapshotPolling() {
   const img = document.getElementById('hik-img');
-  const MJPEG_URL = '/api/ptz/snapshot';
+  const overlay = document.getElementById('hik-overlay');
   img.style.display = 'block';
   document.getElementById('hik-video').style.display = 'none';
-  img.onload = () => _setStatus(true);
+  overlay.style.display = 'none';
+  let fails = 0;
+  function poll() {
+    img.src = '/api/ptz/snapshot?t=' + Date.now();
+  }
+  img.onload = () => { _setStatus(true); fails = 0; };
   img.onerror = () => {
-    _setStatus(false);
-    // Retry a few times, then show unavailable
-    if (!window._hikRetries) window._hikRetries = 0;
-    window._hikRetries++;
-    if (window._hikRetries > 3) {
+    fails++;
+    if (fails > 5) {
       stopHikStream();
-      document.getElementById('hik-overlay').style.display = 'flex';
-      document.getElementById('hik-overlay').innerHTML =
+      overlay.style.display = 'flex';
+      overlay.innerHTML =
         '<span class="material-symbols-outlined text-neutral-500" style="font-size:36px">videocam_off</span>' +
-        '<span class="text-neutral-500 text-xs">实时监控不可用 — 请检查摄像头连接</span>';
-      window._hikRetries = 0;
+        '<span class="text-neutral-500 text-xs">摄像头连接中断</span>';
       return;
     }
-    setTimeout(() => { if (img.src) img.src = MJPEG_URL + '?t=' + Date.now(); }, 3000);
   };
-  img.src = MJPEG_URL;
+  poll();
   clearInterval(window._hikReconnTimer);
-  window._hikReconnTimer = setInterval(() => {
-    if (img.src && img.naturalWidth === 0) img.src = MJPEG_URL + '?t=' + Date.now();
-  }, 5000);
+  window._hikReconnTimer = setInterval(poll, 1000);
+}
+
+function _startMjpegFallback() {
+  _startSnapshotPolling();
 }
 
 function stopHikStream() {

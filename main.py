@@ -158,6 +158,29 @@ async def ptz_snapshot():
     return JSONResponse({"error": "snapshot failed"}, 500)
 
 
+@app.get("/api/ptz/stream")
+async def ptz_stream():
+    """MJPEG stream — continuous snapshot polling as multipart stream."""
+    if not ptz:
+        return JSONResponse({"error": "PTZ not configured"}, 400)
+    from fastapi.responses import StreamingResponse
+
+    async def generate():
+        while True:
+            try:
+                img = await ptz.snapshot()
+                if img:
+                    yield (b"--frame\r\n"
+                           b"Content-Type: image/jpeg\r\n"
+                           b"Content-Length: " + str(len(img)).encode() + b"\r\n\r\n"
+                           + img + b"\r\n")
+            except Exception:
+                pass
+            await asyncio.sleep(0.3)
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
 # ── Agent API ──
 
 @app.post("/api/agent/analyze")
