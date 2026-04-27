@@ -338,6 +338,8 @@ async def save_config(data: dict):
                 "fov_v_deg": ptz_cfg.get("fov_v_deg", cfg.ptz_fov_v),
                 "image_width": ptz_cfg.get("image_width", cfg.ptz_img_w),
                 "image_height": ptz_cfg.get("image_height", cfg.ptz_img_h),
+                "user": ptz_cfg.get("user", cfg.ptz_user),
+                "pass": ptz_cfg.get("pass", cfg.ptz_pass),
                 "home_az": cfg.ptz_home_az,
                 "home_el": cfg.ptz_home_el,
                 "wide_zoom": cfg.ptz_wide_zoom,
@@ -398,6 +400,8 @@ async def save_config(data: dict):
     cfg.ptz_fov_v = yaml_data["camera"]["ptz"]["fov_v_deg"]
     cfg.ptz_img_w = yaml_data["camera"]["ptz"]["image_width"]
     cfg.ptz_img_h = yaml_data["camera"]["ptz"]["image_height"]
+    cfg.ptz_user = yaml_data["camera"]["ptz"]["user"]
+    cfg.ptz_pass = yaml_data["camera"]["ptz"]["pass"]
     cfg.patrol_enabled = yaml_data["patrol"]["enabled"]
     cfg.patrol_interval = yaml_data["patrol"]["interval_minutes"]
     cfg.patrol_strategy = yaml_data["patrol"]["strategy"]
