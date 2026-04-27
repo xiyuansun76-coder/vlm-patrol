@@ -6,3 +6,4 @@ numpy>=1.26
 pyyaml>=6.0
 python-dotenv>=1.0
 websockets>=12.0
+python-multipart>=0.0.9
