@@ -521,11 +521,12 @@
           </div>
         </div>
 
-        <!-- ── MQTT (Sensors + Actuator) ── -->
+        <!-- ── Sensors ── -->
         <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
           <div class="flex items-center gap-2 mb-3">
             <span class="material-symbols-outlined text-yellow-400" style="font-size:16px">sensors</span>
-            <span class="font-headline font-bold text-xs tracking-tight">MQTT 传感器 & 执行器</span>
+            <span class="font-headline font-bold text-xs tracking-tight">传感器</span>
+            <span class="text-[10px] text-neutral-600 font-mono ml-auto">支持 MQTT / HTTP / WebSocket，任选其一或组合</span>
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div><label class="text-[10px] text-neutral-500 mb-1 block">MQTT Broker Host</label>
@@ -536,15 +537,28 @@
               <input id="s-mqtt-sensor-topic" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="zigbee/sensors"></div>
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
-            <div><label class="text-[10px] text-neutral-500 mb-1 block">控制 Topic (执行器)</label>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">HTTP Pull URL</label>
+              <input id="s-sensor-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="http://sensor-server/api/latest"></div>
+            <div class="text-[10px] text-neutral-600 flex items-end font-mono pb-2">HTTP Push: POST /api/sensor/push &nbsp;|&nbsp; WebSocket: ws://host:port/ws</div>
+          </div>
+          <div class="text-[10px] text-neutral-600 mt-2 font-mono">字段: temperature, moisture, pH, nitrogen, phosphorus, potassium, air_temperature, air_humidity, co2</div>
+        </div>
+
+        <!-- ── Actuator ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-orange-400" style="font-size:16px">water_drop</span>
+            <span class="font-headline font-bold text-xs tracking-tight">执行器</span>
+            <span class="text-[10px] text-neutral-600 font-mono ml-auto">MQTT 或 HTTP 控制</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">MQTT 控制 Topic</label>
               <input id="s-mqtt-control-topic" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-orange-500 outline-none" placeholder="greenhouse/control"></div>
-            <div><label class="text-[10px] text-neutral-500 mb-1 block">状态 Topic</label>
-              <input id="s-mqtt-status-topic" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-orange-500 outline-none" placeholder="greenhouse/status"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">HTTP 控制 URL</label>
+              <input id="s-actuator-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-orange-500 outline-none" placeholder="http://actuator-server/control"></div>
           </div>
-          <div class="text-[10px] text-neutral-600 mt-3 font-mono space-y-1">
-            <div>传感器字段: temperature, moisture, pH, nitrogen, phosphorus, potassium, air_temperature, air_humidity, co2</div>
-            <div>执行器命令: pump/on, pump/off, fan/on, fan/off, light/on, light/off, curtain/on, curtain/off</div>
-          </div>
+          <div class="text-[10px] text-neutral-600 mt-2 font-mono">MQTT 命令: pump/on, pump/off, fan/on, fan/off, light/on, light/off, curtain/on, curtain/off</div>
+          <div class="text-[10px] text-neutral-600 font-mono">HTTP 格式: POST {"action":"pump","enable":true,"duration_sec":60}</div>
         </div>
 
         <!-- ── YOLO ── -->
