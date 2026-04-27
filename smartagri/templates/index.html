@@ -168,6 +168,10 @@
           <span class="material-symbols-outlined shrink-0" style="font-size:20px">radar</span>
           <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">巡检</span>
         </button>
+        <button onclick="setView('knowledge')" data-view="knowledge" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">menu_book</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">知识库</span>
+        </button>
         <button onclick="setView('local')" data-view="local" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
           <span class="material-symbols-outlined shrink-0" style="font-size:20px">memory</span>
           <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">本地服务</span>
@@ -806,6 +810,52 @@
         </button>
       </div>
 
+      <!-- ── Panoramic Annotation ── -->
+      <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl overflow-hidden">
+        <button onclick="document.getElementById('pano-body').classList.toggle('hidden');this.querySelector('.arrow').classList.toggle('rotate-180')" class="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition-colors">
+          <span class="material-symbols-outlined text-yellow-400" style="font-size:16px;font-variation-settings:'FILL' 1">frame_inspect</span>
+          <span class="font-headline font-bold text-xs tracking-tight">全景标注</span>
+          <span class="text-[10px] text-neutral-600 font-mono ml-2">VLM 全景检测 → 人工校验/修改标注</span>
+          <span class="arrow ml-auto material-symbols-outlined text-neutral-600 transition-transform" style="font-size:16px">expand_more</span>
+        </button>
+        <div id="pano-body" class="hidden border-t border-outline-variant/10 p-4 space-y-3">
+          <!-- Controls -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="panoDetect()" id="pano-btn-detect" class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-all text-xs font-headline uppercase tracking-widest">
+              <span class="material-symbols-outlined" style="font-size:14px">radar</span> 拍摄并标注
+            </button>
+            <button onclick="panoSave()" id="pano-btn-save" class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 transition-all text-xs font-headline uppercase tracking-widest" disabled>
+              <span class="material-symbols-outlined" style="font-size:14px">save</span> 保存标注
+            </button>
+            <button onclick="panoAddBox()" id="pano-btn-add" class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all text-xs font-headline uppercase tracking-widest" disabled>
+              <span class="material-symbols-outlined" style="font-size:14px">add_box</span> 添加标注
+            </button>
+            <button onclick="panoStartPatrol()" id="pano-btn-patrol" class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 transition-all text-xs font-headline uppercase tracking-widest" disabled>
+              <span class="material-symbols-outlined" style="font-size:14px">play_arrow</span> 基于标注巡检
+            </button>
+            <span id="pano-status" class="text-[10px] text-neutral-600 font-mono ml-auto"></span>
+            <!-- History dropdown -->
+            <select id="pano-history-sel" class="bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-[10px] text-neutral-400 font-mono" onchange="panoLoadHistory(this.value)">
+              <option value="">-- 历史标注 --</option>
+            </select>
+          </div>
+          <!-- Canvas area -->
+          <div class="relative bg-black rounded-xl overflow-hidden" style="aspect-ratio:16/9">
+            <canvas id="pano-canvas" class="w-full h-full cursor-crosshair" style="display:none"></canvas>
+            <div id="pano-placeholder" class="absolute inset-0 flex items-center justify-center text-neutral-600 text-xs font-mono">
+              点击"拍摄并标注"获取全景 VLM 检测结果
+            </div>
+          </div>
+          <!-- Class selector for new/edit -->
+          <div id="pano-class-picker" class="hidden flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] text-neutral-500 font-headline uppercase">选择类别:</span>
+            <div id="pano-class-btns" class="flex gap-1 flex-wrap"></div>
+          </div>
+          <!-- Label list -->
+          <div id="pano-labels" class="space-y-1"></div>
+        </div>
+      </div>
+
       <!-- Status bar -->
       <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
         <div id="patrol-step" class="text-lime-400 font-headline text-sm font-bold mb-2">就绪</div>
@@ -877,6 +927,52 @@
       </div>
     </div><!-- /view-patrol -->
 
+
+    <!-- ════════════════════ VIEW: 知识库 ════════════════════ -->
+    <div id="view-knowledge" class="view-section space-y-5">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+          <span class="material-symbols-outlined text-amber-400" style="font-size:16px;font-variation-settings:'FILL' 1">menu_book</span>
+        </div>
+        <div>
+          <div class="font-headline font-bold text-sm tracking-tight">植物知识库</div>
+          <div class="text-[10px] text-neutral-500 font-mono">6种目标植物的生长条件、常见病害、养护要点</div>
+        </div>
+      </div>
+      <div id="kb-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <!-- JS fills -->
+      </div>
+      <!-- Detail panel -->
+      <div id="kb-detail" class="hidden bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-5 space-y-4">
+        <div class="flex items-center gap-3">
+          <span id="kb-d-icon" class="material-symbols-outlined text-amber-400" style="font-size:28px;font-variation-settings:'FILL' 1">local_florist</span>
+          <div>
+            <div id="kb-d-name" class="font-headline font-bold text-lg tracking-tight"></div>
+            <div id="kb-d-latin" class="text-[10px] text-neutral-500 font-mono italic"></div>
+          </div>
+          <span id="kb-d-cat" class="ml-auto px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-headline uppercase"></span>
+        </div>
+        <p id="kb-d-desc" class="text-xs text-neutral-400 leading-relaxed"></p>
+        <!-- Growing conditions -->
+        <div>
+          <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2 tracking-widest">生长条件</div>
+          <div id="kb-d-conditions" class="grid grid-cols-2 md:grid-cols-3 gap-2"></div>
+        </div>
+        <!-- Common issues -->
+        <div>
+          <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2 tracking-widest">常见病虫害</div>
+          <div id="kb-d-issues" class="space-y-2"></div>
+        </div>
+        <!-- Care tips -->
+        <div class="bg-lime-500/5 border border-lime-500/10 rounded-xl p-3">
+          <div class="flex items-center gap-1.5 mb-1">
+            <span class="material-symbols-outlined text-lime-400" style="font-size:14px">tips_and_updates</span>
+            <span class="text-[10px] text-lime-400 font-headline uppercase tracking-widest">养护要点</span>
+          </div>
+          <p id="kb-d-tips" class="text-xs text-neutral-400 leading-relaxed"></p>
+        </div>
+      </div>
+    </div><!-- /view-knowledge -->
 
     <!-- ════════════════════ VIEW: 本地服务 ════════════════════ -->
     <div id="view-local" class="view-section space-y-5">
@@ -1021,75 +1117,54 @@
         <div id="vlp-analysis-content" class="text-xs text-neutral-300 whitespace-pre-wrap"></div>
       </div>
 
-      <!-- Settings Panel (collapsible) -->
+      <!-- Dataset Console -->
       <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl overflow-hidden">
-        <button onclick="document.getElementById('vlp-settings-body').classList.toggle('hidden');this.querySelector('.arrow').classList.toggle('rotate-180')" class="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition-colors">
-          <span class="material-symbols-outlined text-neutral-400" style="font-size:16px">settings</span>
-          <span class="font-headline font-bold text-xs tracking-tight">系统设置</span>
+        <button onclick="document.getElementById('ds-body').classList.toggle('hidden');this.querySelector('.arrow').classList.toggle('rotate-180');if(!document.getElementById('ds-body').classList.contains('hidden'))dsLoad()" class="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition-colors">
+          <span class="material-symbols-outlined text-yellow-400" style="font-size:16px;font-variation-settings:'FILL' 1">dataset</span>
+          <span class="font-headline font-bold text-xs tracking-tight">训练集调控台</span>
+          <span class="text-[10px] text-neutral-600 font-mono ml-2">查看/修改 YOLO 训练集图片与标注</span>
           <span class="arrow ml-auto material-symbols-outlined text-neutral-600 transition-transform" style="font-size:16px">expand_more</span>
         </button>
-        <div id="vlp-settings-body" class="hidden border-t border-outline-variant/10 p-4 space-y-4">
-          <!-- LLM -->
-          <div>
-            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">大模型 (LLM)</div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
-              <div><label class="text-[10px] text-neutral-600">API URL</label>
-                <input id="vlp-s-llm-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="http://your-server:11434/v1/chat/completions"></div>
-              <div><label class="text-[10px] text-neutral-600">Model</label>
-                <input id="vlp-s-llm-model" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="qwen3-vl:8b"></div>
-              <div><label class="text-[10px] text-neutral-600">API Key (optional)</label>
-                <input id="vlp-s-llm-key" type="password" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="留空则不使用"></div>
+        <div id="ds-body" class="hidden border-t border-outline-variant/10 p-4 space-y-3">
+          <!-- Controls -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <select id="ds-split" class="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-neutral-300 font-mono" onchange="dsLoad()">
+              <option value="train">train</option>
+              <option value="val">val</option>
+            </select>
+            <span id="ds-count" class="text-[10px] text-neutral-500 font-mono">0 张图片</span>
+            <button onclick="dsLoad()" class="ml-auto text-[10px] text-cyan-400 hover:text-cyan-300 font-headline uppercase tracking-widest">刷新</button>
+          </div>
+          <!-- Thumbnail grid -->
+          <div id="ds-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[300px] overflow-y-auto"></div>
+          <!-- Selected image editor -->
+          <div id="ds-editor" class="hidden space-y-3">
+            <div class="flex items-center gap-2">
+              <span id="ds-ed-name" class="text-xs text-neutral-300 font-mono"></span>
+              <span id="ds-ed-labels-count" class="text-[10px] text-neutral-500 font-mono"></span>
+              <div class="ml-auto flex gap-2">
+                <button onclick="dsAddLabel()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 text-[10px] font-headline uppercase hover:bg-cyan-500/20 transition-all">
+                  <span class="material-symbols-outlined" style="font-size:12px">add_box</span> 添加
+                </button>
+                <button onclick="dsSaveLabels()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-lime-500/30 bg-lime-500/10 text-lime-400 text-[10px] font-headline uppercase hover:bg-lime-500/20 transition-all">
+                  <span class="material-symbols-outlined" style="font-size:12px">save</span> 保存
+                </button>
+                <button onclick="dsMoveImage()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-[10px] font-headline uppercase hover:bg-yellow-500/20 transition-all">
+                  <span class="material-symbols-outlined" style="font-size:12px">swap_horiz</span> 移动
+                </button>
+                <button onclick="dsDeleteImage()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-[10px] font-headline uppercase hover:bg-red-500/20 transition-all">
+                  <span class="material-symbols-outlined" style="font-size:12px">delete</span> 删除
+                </button>
+              </div>
             </div>
-          </div>
-          <!-- Camera -->
-          <div>
-            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">摄像头</div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
-              <div><label class="text-[10px] text-neutral-600">Snapshot URL</label>
-                <input id="vlp-s-cam-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="http://camera-ip/ISAPI/Streaming/channels/101/picture"></div>
-              <div><label class="text-[10px] text-neutral-600">Stream URL</label>
-                <input id="vlp-s-cam-stream" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="rtsp://..."></div>
+            <!-- Canvas with labels overlay -->
+            <div class="relative bg-black rounded-xl overflow-hidden" style="aspect-ratio:16/9">
+              <canvas id="ds-canvas" class="w-full h-full"></canvas>
             </div>
+            <!-- Label list -->
+            <div id="ds-labels-list" class="space-y-1"></div>
           </div>
-          <!-- PTZ -->
-          <div>
-            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">PTZ 云台</div>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
-              <div><label class="text-[10px] text-neutral-600">PTZ URL</label>
-                <input id="vlp-s-ptz-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="http://camera-ip"></div>
-              <div><label class="text-[10px] text-neutral-600">用户名</label>
-                <input id="vlp-s-ptz-user" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="admin"></div>
-              <div><label class="text-[10px] text-neutral-600">密码</label>
-                <input id="vlp-s-ptz-pass" type="password" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none"></div>
-              <div class="flex items-end"><label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="vlp-s-ptz-on" class="sr-only peer">
-                <div class="w-9 h-5 bg-neutral-700 rounded-full peer-checked:bg-lime-500/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                <span class="ml-2 text-[10px] text-neutral-500">启用PTZ</span></label></div>
-            </div>
-          </div>
-          <!-- Patrol -->
-          <div>
-            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">巡检策略</div>
-            <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
-              <div><label class="text-[10px] text-neutral-600">策略</label>
-                <select id="vlp-s-patrol-strategy" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none">
-                  <option value="single">single — 单次拍照</option>
-                  <option value="sweep">sweep — PTZ网格扫描</option>
-                  <option value="vlm_active">vlm_active — 全景→聚焦→诊断</option>
-                </select></div>
-              <div><label class="text-[10px] text-neutral-600">间隔 (分钟)</label>
-                <input id="vlp-s-patrol-interval" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" value="30"></div>
-              <div><label class="text-[10px] text-neutral-600">Agent 间隔 (分钟)</label>
-                <input id="vlp-s-agent-interval" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" value="60"></div>
-            </div>
-          </div>
-          <!-- Save -->
-          <div class="flex items-center gap-3">
-            <button onclick="vlpSaveSettings()" class="px-6 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all text-xs font-headline uppercase tracking-widest">
-              <span class="material-symbols-outlined align-middle" style="font-size:14px">save</span> 保存设置
-            </button>
-            <span id="vlp-settings-status" class="text-[10px] text-neutral-600 font-mono"></span>
-          </div>
+          <span id="ds-status" class="text-[10px] text-neutral-600 font-mono"></span>
         </div>
       </div>
 
@@ -1154,7 +1229,7 @@
 </div>
 
 <script>
-const TOKEN = "{{ token }}";
+const TOKEN = "";
 const actionState = {};
 let soilChart, nkpChart, envChartBig, airEnvChart;
 let soilChartInited = false, atmChartInited = false;
@@ -1297,45 +1372,50 @@ function updatePlantScore() {
 
 async function refreshRealtime() {
   try {
-    const data = await fetch('/api/sensors/latest').then(r => r.json());
-    const m = {};
-    data.forEach(row => { Object.keys(row).forEach(k => { if (row[k] != null) m[k] = row[k]; }); });
-    applyRealtime(m);
+    const data = await fetch('/api/sensor/latest').then(r => r.json());
+    if (data && typeof data === 'object') applyRealtime(data);
   } catch(_) {}
 }
 
-// ── SSE ────────────────────────────────────────────────────
-function connectSSE() {
-  const es = new EventSource('/api/stream');
-  es.onmessage = e => {
+// ── WebSocket realtime ────────────────────────────────────
+let _ws = null;
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _ws = new WebSocket(proto + '//' + location.host + '/ws');
+  _ws.onmessage = e => {
     try {
-      const d = JSON.parse(e.data);
-      if (d.node_id === '__control__') applyControlState(d);
-      else { applyRealtime(d); applyCharts(d); }
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'sensor' && msg.data) {
+        applyRealtime(msg.data);
+        if (msg.all) applyCharts(msg.all);
+      } else if (msg.type === 'control') {
+        applyControlState(msg.data || msg);
+      }
     } catch(_) {}
   };
-  es.onerror = () => { es.close(); setTimeout(connectSSE, 5000); };
+  _ws.onclose = () => { setTimeout(connectWS, 5000); };
+  _ws.onerror = () => { _ws.close(); };
 }
+// Keep old name as alias
+function connectSSE() { connectWS(); }
 
 // ── Charts: 土壤 view ─────────────────────────────────────
 async function initSoilCharts() {
   try {
-    const soilData = await fetch('/api/sensors?node_id=30aea49c97d8&limit=60').then(r => r.json());
-    const soilPts = soilData.filter(r => r.moisture != null).reverse();
+    // Initialize empty charts — data comes from WebSocket in real-time
     soilChart = new Chart(document.getElementById('soilChart'), {
       type:'line', options:CHART_OPT,
-      data:{labels:soilPts.map((_,i)=>i), datasets:[
-        {label:'温度 °C',data:soilPts.map(r=>r.temperature??null),borderColor:'#79ff5b',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
-        {label:'湿度 %', data:soilPts.map(r=>r.moisture??null), borderColor:'#00f4fe',backgroundColor:'rgba(0,244,254,.05)',borderWidth:1.5,tension:.4,pointRadius:0,fill:true}
+      data:{labels:[], datasets:[
+        {label:'温度 °C',data:[],borderColor:'#79ff5b',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
+        {label:'湿度 %', data:[], borderColor:'#00f4fe',backgroundColor:'rgba(0,244,254,.05)',borderWidth:1.5,tension:.4,pointRadius:0,fill:true}
       ]}
     });
-    const nkpPts = soilData.filter(r => r.nitrogen != null).reverse();
     nkpChart = new Chart(document.getElementById('nkpChart'), {
       type:'line', options:CHART_OPT,
-      data:{labels:nkpPts.map((_,i)=>i), datasets:[
-        {label:'N',data:nkpPts.map(r=>r.nitrogen??null),   borderColor:'#a78bfa',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
-        {label:'P',data:nkpPts.map(r=>r.phosphorus??null), borderColor:'#f472b6',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
-        {label:'K',data:nkpPts.map(r=>r.potassium??null),  borderColor:'#fb923c',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0}
+      data:{labels:[], datasets:[
+        {label:'N',data:[],   borderColor:'#a78bfa',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
+        {label:'P',data:[], borderColor:'#f472b6',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
+        {label:'K',data:[],  borderColor:'#fb923c',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0}
       ]}
     });
   } catch(_) {}
@@ -1354,36 +1434,24 @@ const ATM_OPT = {
 
 async function initAtmChart() {
   try {
-    const [d1, d2] = await Promise.all([
-      fetch('/api/sensors?node_id=esp32_co2&limit=80').then(r=>r.json()),
-      fetch('/api/sensors?node_id=greenhouse_zigbee&limit=80').then(r=>r.json()),
-    ]);
-    const all = [...d1, ...d2].sort((a,b)=>a.timestamp.localeCompare(b.timestamp)).slice(-80);
-    const labels   = all.map(r => r.timestamp.slice(11,16));
-    const co2Data  = all.map(r => r.co2);
-    const tempData = all.map(r => r.air_temperature);
-    const humData  = all.map(r => r.air_humidity);
-
-    // 图1：CO₂
+    // Initialize empty charts — data comes from WebSocket in real-time
     envChartBig = new Chart(document.getElementById('envChartBig'), {
       type:'line',
       options: JSON.parse(JSON.stringify(ATM_OPT)),
-      data:{ labels, datasets:[
-        { label:'CO₂ ppm', data:co2Data,
+      data:{ labels:[], datasets:[
+        { label:'CO₂ ppm', data:[],
           borderColor:'#39ff14', backgroundColor:'rgba(57,255,20,.07)',
           borderWidth:2, tension:.4, pointRadius:0, fill:true },
       ]}
     });
-
-    // 图2：空气温湿度
     airEnvChart = new Chart(document.getElementById('airEnvChart'), {
       type:'line',
       options: JSON.parse(JSON.stringify(ATM_OPT)),
-      data:{ labels, datasets:[
-        { label:'空气温度°C', data:tempData,
+      data:{ labels:[], datasets:[
+        { label:'空气温度°C', data:[],
           borderColor:'#f87171', backgroundColor:'rgba(248,113,113,.07)',
           borderWidth:2, tension:.4, pointRadius:0, fill:true },
-        { label:'空气湿度%', data:humData,
+        { label:'空气湿度%', data:[],
           borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.07)',
           borderWidth:2, tension:.4, pointRadius:0, fill:false },
       ]}
@@ -1404,20 +1472,16 @@ function pushPoint(chart, t, vals, max=50) {
 
 function applyCharts(d) {
   const t = Date.now();
-  if (d.node_id === 'greenhouse_zigbee' || d.node_id === 'esp32_co2') {
-    if (d.co2 != null)           pushPoint(envChartBig,  t, [d.co2], 80);
-    if (d.air_temperature != null || d.air_humidity != null)
-      pushPoint(airEnvChart, t, [d.air_temperature ?? null, d.air_humidity ?? null], 80);
-  }
-  if (d.node_id === '30aea49c97d8') {
-    if (d.moisture != null) pushPoint(soilChart, t, [d.temperature??null, d.moisture]);
-    if (d.nitrogen != null) pushPoint(nkpChart, t, [d.nitrogen, d.phosphorus??null, d.potassium??null]);
-  }
+  if (d.co2 != null)           pushPoint(envChartBig,  t, [d.co2], 80);
+  if (d.air_temperature != null || d.air_humidity != null)
+    pushPoint(airEnvChart, t, [d.air_temperature ?? null, d.air_humidity ?? null], 80);
+  if (d.moisture != null) pushPoint(soilChart, t, [d.temperature??null, d.moisture]);
+  if (d.nitrogen != null) pushPoint(nkpChart, t, [d.nitrogen, d.phosphorus??null, d.potassium??null]);
 }
 
 // ── Control ────────────────────────────────────────────────
 async function syncControlState() {
-  try { const s = await fetch('/api/control/state').then(r=>r.json()); applyControlState(s); } catch(_) {}
+  // No persistent control state in generic framework — state comes from WebSocket
 }
 function applyControlState(state) {
   Object.entries(state).forEach(([action, on]) => {
@@ -1436,9 +1500,10 @@ async function toggle(action, btn) {
   if (on) btn.classList.add('on-' + action);
   btn.setAttribute('aria-pressed', String(on));
   try {
-    await fetch('/api/control', {method:'POST',
-      headers:{'Content-Type':'application/json',Authorization:'Bearer '+TOKEN},
-      body:JSON.stringify({action,enable:on,source:'web'})});
+    const cmd = action + '/' + (on ? 'on' : 'off');
+    await fetch('/api/control/send', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({command: cmd})});
   } catch(_) {}
 }
 
@@ -2093,6 +2158,10 @@ function vlpLoadSettings(cfg) {
   s('s-ptz-url', cfg.ptz_url);
   s('s-sensor-url', cfg.sensor_url);
   s('s-actuator-url', cfg.actuator_url);
+  s('s-mqtt-host', cfg.mqtt?.broker);
+  s('s-mqtt-port', cfg.mqtt?.port);
+  s('s-mqtt-sensor-topic', cfg.mqtt?.sensor_topic);
+  s('s-mqtt-control-topic', cfg.mqtt?.control_topic);
   s('s-yolo-model', cfg.yolo?.model_path);
   s('s-yolo-datadir', cfg.yolo?.data_dir);
   const ptzOn = document.getElementById('s-ptz-on');
@@ -2126,6 +2195,8 @@ async function saveAllSettings() {
            enabled: document.getElementById('s-ptz-on')?.checked || false },
     sensor: { url: g('s-sensor-url') },
     actuator: { url: g('s-actuator-url') },
+    mqtt: { broker: g('s-mqtt-host'), port: parseInt(g('s-mqtt-port')) || 1883,
+            sensor_topic: g('s-mqtt-sensor-topic'), control_topic: g('s-mqtt-control-topic') },
     yolo: { model_path: g('s-yolo-model'), data_dir: g('s-yolo-datadir'),
             auto_train: document.getElementById('s-yolo-autotrain')?.checked || false },
     patrol: { strategy: g('s-patrol-strategy'),
@@ -2333,12 +2404,416 @@ setInterval(() => {
 }, 15000);
 
 
+// ══════════════════════════════════════════════════════════════
+// ── Panoramic Annotation ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+let panoData = null;  // {id, image(b64), plants:[], width, height, classes}
+let panoSelectedIdx = -1;
+let panoDrawing = false;
+let panoDrawStart = null;
+const PANO_COLORS = ['#f87171','#fb923c','#facc15','#4ade80','#22d3ee','#a78bfa','#f472b6','#818cf8'];
+
+function panoColor(cls_id) { return PANO_COLORS[cls_id % PANO_COLORS.length]; }
+
+async function panoDetect() {
+  const st = document.getElementById('pano-status');
+  const btn = document.getElementById('pano-btn-detect');
+  btn.disabled = true; st.textContent = '正在拍摄并检测...';
+  try {
+    const r = await fetch('/api/annotation/detect', {method:'POST'});
+    panoData = await r.json();
+    if (panoData.error) { st.textContent = panoData.error; btn.disabled = false; return; }
+    panoRender();
+    panoRenderLabels();
+    document.getElementById('pano-btn-save').disabled = false;
+    document.getElementById('pano-btn-add').disabled = false;
+    document.getElementById('pano-btn-patrol').disabled = false;
+    st.textContent = `检测到 ${panoData.plants.length} 株植物`;
+    panoLoadHistoryList();
+  } catch(e) { st.textContent = '检测失败: ' + e.message; }
+  btn.disabled = false;
+}
+
+function panoRender() {
+  if (!panoData) return;
+  const canvas = document.getElementById('pano-canvas');
+  const placeholder = document.getElementById('pano-placeholder');
+  canvas.style.display = 'block'; placeholder.style.display = 'none';
+  const container = canvas.parentElement;
+  const cw = container.clientWidth, ch = container.clientHeight;
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0,0,cw,ch);
+    ctx.drawImage(img,0,0,cw,ch);
+    const sx = cw / panoData.width, sy = ch / panoData.height;
+    (panoData.plants||[]).forEach((p,i) => {
+      const b = p.bbox;
+      if (!b || b.length<4) return;
+      const x=b[0]*sx, y=b[1]*sy, w=(b[2]-b[0])*sx, h=(b[3]-b[1])*sy;
+      const cls_id = panoData.classes ? panoData.classes.indexOf(p.type) : i;
+      const color = panoColor(cls_id >= 0 ? cls_id : i);
+      ctx.strokeStyle = color; ctx.lineWidth = i===panoSelectedIdx?3:2;
+      ctx.strokeRect(x,y,w,h);
+      ctx.fillStyle = color; ctx.globalAlpha=0.15; ctx.fillRect(x,y,w,h); ctx.globalAlpha=1;
+      ctx.font = '12px monospace'; ctx.fillStyle = color;
+      const label = `${p.type} ${(p.confidence||0).toFixed(2)}`;
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(x,y-16,tw+6,16);
+      ctx.fillStyle=color; ctx.fillText(label, x+3, y-4);
+    });
+  };
+  img.src = panoData.image ? ('data:image/jpeg;base64,' + panoData.image) : `/api/annotation/${panoData.id}/image`;
+}
+
+function panoRenderLabels() {
+  const el = document.getElementById('pano-labels');
+  if (!panoData || !panoData.plants.length) { el.innerHTML = '<div class="text-neutral-600 text-[10px]">暂无标注</div>'; return; }
+  el.innerHTML = panoData.plants.map((p,i) => {
+    const cls_id = panoData.classes ? panoData.classes.indexOf(p.type) : i;
+    const color = panoColor(cls_id >= 0 ? cls_id : i);
+    const sel = i === panoSelectedIdx ? 'border-white/30' : 'border-outline-variant/10';
+    return `<div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container/60 border ${sel} cursor-pointer hover:bg-white/5 transition-colors" onclick="panoSelect(${i})">
+      <span class="w-3 h-3 rounded-sm shrink-0" style="background:${color}"></span>
+      <span class="text-xs text-neutral-300 font-mono flex-1">${p.type}</span>
+      <span class="text-[10px] text-neutral-600 font-mono">${(p.confidence||0).toFixed(2)}</span>
+      <span class="text-[10px] text-neutral-600 font-mono">[${p.bbox.map(v=>Math.round(v)).join(',')}]</span>
+      <button onclick="event.stopPropagation();panoDeleteLabel(${i})" class="text-red-400/50 hover:text-red-400 transition-colors">
+        <span class="material-symbols-outlined" style="font-size:14px">close</span>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function panoSelect(idx) {
+  panoSelectedIdx = idx === panoSelectedIdx ? -1 : idx;
+  panoRender(); panoRenderLabels();
+}
+
+function panoDeleteLabel(idx) {
+  if (!panoData) return;
+  panoData.plants.splice(idx, 1);
+  if (panoSelectedIdx >= panoData.plants.length) panoSelectedIdx = -1;
+  panoRender(); panoRenderLabels();
+  document.getElementById('pano-status').textContent = '已删除标注';
+}
+
+function panoAddBox() {
+  if (!panoData) return;
+  // Show class picker
+  const picker = document.getElementById('pano-class-picker');
+  picker.classList.remove('hidden');
+  const btns = document.getElementById('pano-class-btns');
+  btns.innerHTML = (panoData.classes||[]).map((c,i) =>
+    `<button onclick="panoStartDraw('${c}')" class="px-2 py-1 rounded text-[10px] font-mono border transition-all hover:bg-white/10" style="border-color:${panoColor(i)};color:${panoColor(i)}">${c}</button>`
+  ).join('');
+}
+
+function panoStartDraw(cls) {
+  document.getElementById('pano-class-picker').classList.add('hidden');
+  panoDrawing = true;
+  document.getElementById('pano-status').textContent = '在图片上拖拽绘制标注框...';
+  const canvas = document.getElementById('pano-canvas');
+  canvas.style.cursor = 'crosshair';
+  canvas._drawCls = cls;
+  canvas.onmousedown = e => {
+    const rect = canvas.getBoundingClientRect();
+    panoDrawStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  canvas.onmouseup = e => {
+    if (!panoDrawStart) return;
+    const rect = canvas.getBoundingClientRect();
+    const ex = e.clientX - rect.left, ey = e.clientY - rect.top;
+    const sx = panoData.width / canvas.width, sy = panoData.height / canvas.height;
+    const x1 = Math.min(panoDrawStart.x, ex) * sx, y1 = Math.min(panoDrawStart.y, ey) * sy;
+    const x2 = Math.max(panoDrawStart.x, ex) * sx, y2 = Math.max(panoDrawStart.y, ey) * sy;
+    if (Math.abs(x2-x1) > 5 && Math.abs(y2-y1) > 5) {
+      panoData.plants.push({ type: canvas._drawCls, bbox: [x1,y1,x2,y2], confidence: 1.0, health: 'unknown' });
+      panoRender(); panoRenderLabels();
+      document.getElementById('pano-status').textContent = '已添加标注';
+    }
+    panoDrawStart = null; panoDrawing = false;
+    canvas.style.cursor = 'crosshair';
+    canvas.onmousedown = null; canvas.onmouseup = null;
+  };
+}
+
+async function panoSave() {
+  if (!panoData) return;
+  const saveData = { ...panoData }; delete saveData.image;  // don't re-save base64
+  try {
+    await fetch('/api/annotation/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(saveData)});
+    document.getElementById('pano-status').textContent = '标注已保存';
+    panoLoadHistoryList();
+  } catch(e) { document.getElementById('pano-status').textContent = '保存失败'; }
+}
+
+async function panoStartPatrol() {
+  if (!panoData || !panoData.plants.length) return;
+  const st = document.getElementById('pano-status');
+  st.textContent = `基于 ${panoData.plants.length} 株标注开始巡检...`;
+  try {
+    const r = await fetch('/api/patrol/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ annotation: { plants: panoData.plants } })
+    });
+    const j = await r.json();
+    if (j.status === 'started') {
+      st.textContent = '巡检已启动，基于当前标注逐株聚焦诊断';
+      document.getElementById('patrol-step').textContent = '巡检中...（基于全景标注）';
+      document.getElementById('patrol-btn-start').disabled = true;
+      document.getElementById('patrol-btn-stop').disabled = false;
+      document.getElementById('patrol-btn-stop').classList.remove('opacity-40');
+    } else {
+      st.textContent = j.status || '启动失败';
+    }
+  } catch(e) { st.textContent = '启动失败: ' + e.message; }
+}
+
+async function panoLoadHistoryList() {
+  try {
+    const list = await fetch('/api/annotation/list').then(r=>r.json());
+    const sel = document.getElementById('pano-history-sel');
+    sel.innerHTML = '<option value="">-- 历史标注 --</option>' + list.map(a =>
+      `<option value="${a.id}">${a.timestamp.replace('T',' ').slice(0,19)} (${a.plant_count}株)</option>`
+    ).join('');
+  } catch(_) {}
+}
+
+async function panoLoadHistory(id) {
+  if (!id) return;
+  try {
+    const ann = await fetch(`/api/annotation/${id}`).then(r=>r.json());
+    panoData = { ...ann, image: null };  // image loaded via URL
+    // Load image from server
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      canvas.getContext('2d').drawImage(img,0,0);
+      panoData.image = canvas.toDataURL('image/jpeg').split(',')[1];
+      panoData.width = panoData.width || img.width;
+      panoData.height = panoData.height || img.height;
+      panoRender(); panoRenderLabels();
+      document.getElementById('pano-btn-save').disabled = false;
+      document.getElementById('pano-btn-add').disabled = false;
+      document.getElementById('pano-btn-patrol').disabled = false;
+      document.getElementById('pano-status').textContent = `已加载 ${panoData.plants.length} 个标注`;
+    };
+    img.src = `/api/annotation/${id}/image`;
+  } catch(e) { document.getElementById('pano-status').textContent = '加载失败'; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── Plant Knowledge Base ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+async function kbInit() {
+  try {
+    const data = await fetch('/api/knowledge').then(r=>r.json());
+    const grid = document.getElementById('kb-grid');
+    const condIcons = {temperature:'thermostat',humidity:'water_drop',soil_ph:'science',light:'wb_sunny',soil_moisture:'opacity'};
+    const condNames = {temperature:'温度',humidity:'空气湿度',soil_ph:'土壤pH',light:'光照',soil_moisture:'土壤水分'};
+    grid.innerHTML = Object.entries(data.plants).map(([key, p]) => `
+      <div onclick="kbShow('${key}')" class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4 cursor-pointer hover:bg-white/5 hover:border-amber-500/20 transition-all group">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+            <span class="material-symbols-outlined text-amber-400" style="font-size:20px;font-variation-settings:'FILL' 1">${p.icon}</span>
+          </div>
+          <div>
+            <div class="font-headline font-bold text-sm">${p.name}</div>
+            <div class="text-[10px] text-neutral-600 font-mono italic">${p.latin}</div>
+          </div>
+          <span class="ml-auto px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-headline">${p.category}</span>
+        </div>
+        <p class="text-[10px] text-neutral-500 leading-relaxed mb-2">${p.description}</p>
+        <div class="flex gap-1.5 flex-wrap">
+          ${p.common_issues.slice(0,2).map(is => `<span class="px-2 py-0.5 rounded bg-red-500/10 text-red-400/70 text-[10px] font-mono">${is.name}</span>`).join('')}
+          ${p.common_issues.length > 2 ? `<span class="text-[10px] text-neutral-600">+${p.common_issues.length-2}</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+    window._kbData = data.plants;
+  } catch(_) {}
+}
+
+function kbShow(key) {
+  const p = window._kbData[key]; if (!p) return;
+  const detail = document.getElementById('kb-detail'); detail.classList.remove('hidden');
+  document.getElementById('kb-d-icon').textContent = p.icon;
+  document.getElementById('kb-d-name').textContent = p.name;
+  document.getElementById('kb-d-latin').textContent = p.latin;
+  document.getElementById('kb-d-cat').textContent = p.category;
+  document.getElementById('kb-d-desc').textContent = p.description;
+  document.getElementById('kb-d-tips').textContent = p.care_tips;
+  const condIcons = {temperature:'thermostat',humidity:'water_drop',soil_ph:'science',light:'wb_sunny',soil_moisture:'opacity'};
+  const condNames = {temperature:'温度',humidity:'空气湿度',soil_ph:'土壤pH',light:'光照',soil_moisture:'土壤水分'};
+  document.getElementById('kb-d-conditions').innerHTML = Object.entries(p.growing_conditions).map(([k,v]) => `
+    <div class="bg-surface-container/60 rounded-lg p-3 border border-outline-variant/10">
+      <div class="flex items-center gap-1.5 mb-1">
+        <span class="material-symbols-outlined text-amber-400" style="font-size:14px">${condIcons[k]||'info'}</span>
+        <span class="text-[10px] text-neutral-500 font-headline uppercase">${condNames[k]||k}</span>
+      </div>
+      <div class="text-xs text-neutral-300">${v}</div>
+    </div>
+  `).join('');
+  document.getElementById('kb-d-issues').innerHTML = p.common_issues.map(is => `
+    <div class="bg-red-500/5 border border-red-500/10 rounded-lg p-3">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="material-symbols-outlined text-red-400" style="font-size:14px">bug_report</span>
+        <span class="text-xs font-bold text-red-400">${is.name}</span>
+      </div>
+      <div class="text-[10px] text-neutral-500 mb-1"><strong class="text-neutral-400">症状:</strong> ${is.symptom}</div>
+      <div class="text-[10px] text-neutral-500"><strong class="text-lime-400/70">防治:</strong> ${is.solution}</div>
+    </div>
+  `).join('');
+  detail.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── Dataset Console ───────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+let dsCurrentFile = null, dsCurrentSplit = null, dsLabels = [], dsClasses = [];
+
+async function dsLoad() {
+  const split = document.getElementById('ds-split').value;
+  try {
+    const data = await fetch(`/api/dataset/list?split=${split}`).then(r=>r.json());
+    dsClasses = data.classes || [];
+    document.getElementById('ds-count').textContent = `${data.total} 张图片`;
+    const grid = document.getElementById('ds-grid');
+    if (!data.items.length) { grid.innerHTML = '<div class="text-neutral-600 text-xs col-span-full text-center py-8">暂无训练图片</div>'; return; }
+    grid.innerHTML = data.items.map(it => `
+      <div onclick="dsSelect('${split}','${it.filename}')" class="relative rounded-lg overflow-hidden border border-outline-variant/10 cursor-pointer hover:border-cyan-500/30 transition-all group aspect-square">
+        <img src="/api/dataset/image/${split}/${it.filename}" class="w-full h-full object-cover" loading="lazy">
+        <div class="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-1">
+          <div class="text-[8px] text-neutral-400 font-mono truncate">${it.filename}</div>
+          <div class="text-[8px] text-lime-400 font-mono">${it.labels} 标注</div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { document.getElementById('ds-count').textContent = '加载失败'; }
+}
+
+async function dsSelect(split, filename) {
+  dsCurrentFile = filename; dsCurrentSplit = split;
+  document.getElementById('ds-editor').classList.remove('hidden');
+  document.getElementById('ds-ed-name').textContent = filename;
+  // Load labels
+  try {
+    const data = await fetch(`/api/dataset/labels/${split}/${filename}`).then(r=>r.json());
+    dsLabels = data.labels || [];
+    dsClasses = data.classes || dsClasses;
+    document.getElementById('ds-ed-labels-count').textContent = `${dsLabels.length} 个标注`;
+    dsRenderCanvas();
+    dsRenderLabelsList();
+  } catch(_) {}
+}
+
+function dsRenderCanvas() {
+  const canvas = document.getElementById('ds-canvas');
+  const container = canvas.parentElement;
+  const cw = container.clientWidth, ch = container.clientHeight;
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0,0,cw,ch);
+    ctx.drawImage(img,0,0,cw,ch);
+    dsLabels.forEach((lbl,i) => {
+      // YOLO normalized (cx,cy,w,h) → pixel
+      const x = (lbl.cx - lbl.w/2) * cw;
+      const y = (lbl.cy - lbl.h/2) * ch;
+      const w = lbl.w * cw, h = lbl.h * ch;
+      const color = panoColor(lbl.class_id);
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.strokeRect(x,y,w,h);
+      ctx.globalAlpha=0.1; ctx.fillStyle=color; ctx.fillRect(x,y,w,h); ctx.globalAlpha=1;
+      ctx.font = '11px monospace'; ctx.fillStyle='rgba(0,0,0,0.7)';
+      const label = lbl.class_name || dsClasses[lbl.class_id] || lbl.class_id;
+      const tw = ctx.measureText(label).width;
+      ctx.fillRect(x,y-14,tw+6,14);
+      ctx.fillStyle = color; ctx.fillText(label, x+3, y-3);
+    });
+  };
+  img.src = `/api/dataset/image/${dsCurrentSplit}/${dsCurrentFile}`;
+}
+
+function dsRenderLabelsList() {
+  const el = document.getElementById('ds-labels-list');
+  el.innerHTML = dsLabels.map((lbl,i) => {
+    const color = panoColor(lbl.class_id);
+    const name = lbl.class_name || dsClasses[lbl.class_id] || lbl.class_id;
+    return `<div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container/60 border border-outline-variant/10">
+      <span class="w-3 h-3 rounded-sm shrink-0" style="background:${color}"></span>
+      <select onchange="dsChangeClass(${i},this.value)" class="bg-neutral-900 border border-neutral-700 rounded px-2 py-0.5 text-[10px] text-neutral-300 font-mono">
+        ${dsClasses.map((c,ci) => `<option value="${ci}" ${ci===lbl.class_id?'selected':''}>${c}</option>`).join('')}
+      </select>
+      <span class="text-[10px] text-neutral-600 font-mono flex-1">[${lbl.cx.toFixed(3)}, ${lbl.cy.toFixed(3)}, ${lbl.w.toFixed(3)}, ${lbl.h.toFixed(3)}]</span>
+      <button onclick="dsDeleteLabel(${i})" class="text-red-400/50 hover:text-red-400"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>
+    </div>`;
+  }).join('');
+}
+
+function dsChangeClass(idx, cls_id) {
+  dsLabels[idx].class_id = parseInt(cls_id);
+  dsLabels[idx].class_name = dsClasses[cls_id] || '';
+  dsRenderCanvas();
+}
+
+function dsDeleteLabel(idx) {
+  dsLabels.splice(idx, 1);
+  dsRenderCanvas(); dsRenderLabelsList();
+  document.getElementById('ds-ed-labels-count').textContent = `${dsLabels.length} 个标注`;
+}
+
+function dsAddLabel() {
+  // Add default center label
+  dsLabels.push({ class_id: 0, class_name: dsClasses[0]||'', cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 });
+  dsRenderCanvas(); dsRenderLabelsList();
+}
+
+async function dsSaveLabels() {
+  if (!dsCurrentFile) return;
+  const st = document.getElementById('ds-status');
+  try {
+    await fetch(`/api/dataset/labels/${dsCurrentSplit}/${dsCurrentFile}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({labels: dsLabels})
+    });
+    st.textContent = '标注已保存';
+    dsLoad();  // refresh grid counts
+  } catch(e) { st.textContent = '保存失败'; }
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
+async function dsDeleteImage() {
+  if (!dsCurrentFile || !confirm(`确认删除 ${dsCurrentFile}？`)) return;
+  await fetch(`/api/dataset/image/${dsCurrentSplit}/${dsCurrentFile}`, {method:'DELETE'});
+  document.getElementById('ds-editor').classList.add('hidden');
+  dsCurrentFile = null; dsLoad();
+}
+
+async function dsMoveImage() {
+  if (!dsCurrentFile) return;
+  const target = dsCurrentSplit === 'train' ? 'val' : 'train';
+  await fetch(`/api/dataset/move/${dsCurrentSplit}/${dsCurrentFile}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({target})
+  });
+  document.getElementById('ds-editor').classList.add('hidden');
+  dsCurrentFile = null; dsLoad();
+}
+
 // ── Boot ────────────────────────────────────────────────────
 refreshDevices();
 refreshRealtime();
 syncControlState();
 connectSSE();
 refreshCamera();
+kbInit();
+panoLoadHistoryList();
 
 setInterval(refreshDevices, 10000);
 setInterval(refreshCamera,  30000);

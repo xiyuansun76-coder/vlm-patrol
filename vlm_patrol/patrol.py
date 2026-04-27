@@ -254,10 +254,80 @@ class Patrol:
         await self.ptz.go_home()
         session.ptz_travel = self.ptz.total_travel
 
+    # ── Strategy: annotation-based (use pre-annotated plants) ──
+
+    async def _run_from_annotation(self, session: PatrolSession,
+                                    plants: list[dict],
+                                    panorama: bytes | None = None,
+                                    sensor_data: dict = None):
+        """Run patrol using pre-annotated plant positions from panoramic annotation."""
+        if not self.ptz:
+            log.warning("Annotation-based patrol requires PTZ")
+            session.errors.append("PTZ not configured")
+            return
+
+        self.ptz.reset_travel()
+        img_w, img_h = self.cfg.ptz_img_w, self.cfg.ptz_img_h
+
+        # Go home to get reference position
+        await self.ptz.go_home()
+        ref_az, ref_el, _ = await self.ptz.get_position()
+
+        # Collect panorama pseudo-labels if image provided
+        if panorama:
+            self._collect_image(panorama, plants, session)
+
+        log.info("Annotation patrol: %d plants to inspect", len(plants))
+
+        # Focus on each annotated plant → close-up → diagnose
+        for i, p in enumerate(plants):
+            if not self._running:
+                break
+
+            bbox = p.get("bbox", [])
+            cls_name = p.get("type", "unknown")
+            if not bbox or len(bbox) < 4:
+                continue
+
+            log.info("Focusing on plant %d/%d: %s at bbox %s", i + 1, len(plants), cls_name, bbox)
+
+            # Move PTZ to plant
+            await self.ptz.focus_on_bbox(bbox, ref_az, ref_el)
+            closeup = await self.ptz.snapshot()
+            if not closeup:
+                session.errors.append(f"Close-up snapshot failed for plant {i}")
+                continue
+
+            # VLM diagnosis on close-up
+            diag = await self.vlm.diagnose(closeup, sensor_data)
+
+            # Collect close-up image with VLM label
+            if diag.get("bbox") and diag.get("type") in self.cfg.classes:
+                self._collect_image(closeup, [{
+                    "type": diag["type"],
+                    "bbox": diag["bbox"],
+                }], session)
+
+            cur_az, cur_el, _ = await self.ptz.get_position()
+            session.plants.append(PlantRecord(
+                id=str(uuid.uuid4())[:8],
+                type=diag.get("type", cls_name),
+                health=diag.get("health", p.get("health", "unknown")),
+                confidence=diag.get("confidence", 0),
+                bbox=bbox,
+                details=diag.get("details", ""),
+                timestamp=datetime.now().isoformat(),
+                ptz_az=cur_az, ptz_el=cur_el,
+            ))
+
+        await self.ptz.go_home()
+        session.ptz_travel = self.ptz.total_travel
+
     # ── Main entry ──
 
     async def run_once(self, sensor_data: dict = None,
-                       strategy: str = None) -> PatrolSession:
+                       strategy: str = None,
+                       annotation: dict = None) -> PatrolSession:
         """Run one patrol cycle with the specified strategy."""
         strategy = strategy or self.cfg.patrol_strategy
         session = PatrolSession(
@@ -269,7 +339,12 @@ class Patrol:
         self.session = session
 
         try:
-            if strategy == "vlm_active" and self.ptz:
+            if annotation and annotation.get("plants"):
+                # Use pre-annotated plants from panoramic annotation
+                await self._run_from_annotation(
+                    session, annotation["plants"],
+                    panorama=None, sensor_data=sensor_data)
+            elif strategy == "vlm_active" and self.ptz:
                 await self._run_vlm_active(session, sensor_data)
             elif strategy == "sweep" and self.ptz:
                 await self._run_sweep(session, sensor_data)
