@@ -1700,8 +1700,21 @@ async function startHikStream() {
   stopHikStream();
   const video = document.getElementById('hik-video');
 
-  // Skip WebRTC (requires go2rtc), go straight to snapshot polling
-  _startMjpegFallback();
+  // Try snapshot first to check if camera is reachable
+  try {
+    const testResp = await fetch('/api/ptz/snapshot');
+    if (testResp.ok) {
+      _startMjpegFallback();
+      return;
+    }
+  } catch(_) {}
+
+  // Camera not available
+  _setStatus(false);
+  document.getElementById('hik-overlay').style.display = 'flex';
+  document.getElementById('hik-overlay').innerHTML =
+    '<span class="material-symbols-outlined text-neutral-500" style="font-size:36px">videocam_off</span>' +
+    '<span class="text-neutral-500 text-xs">实时监控不可用 — 请在设置页配置摄像头</span>';
   return;
 
   try {
@@ -1748,6 +1761,18 @@ function _startMjpegFallback() {
   img.onload = () => _setStatus(true);
   img.onerror = () => {
     _setStatus(false);
+    // Retry a few times, then show unavailable
+    if (!window._hikRetries) window._hikRetries = 0;
+    window._hikRetries++;
+    if (window._hikRetries > 3) {
+      stopHikStream();
+      document.getElementById('hik-overlay').style.display = 'flex';
+      document.getElementById('hik-overlay').innerHTML =
+        '<span class="material-symbols-outlined text-neutral-500" style="font-size:36px">videocam_off</span>' +
+        '<span class="text-neutral-500 text-xs">实时监控不可用 — 请检查摄像头连接</span>';
+      window._hikRetries = 0;
+      return;
+    }
     setTimeout(() => { if (img.src) img.src = MJPEG_URL + '?t=' + Date.now(); }, 3000);
   };
   img.src = MJPEG_URL;
