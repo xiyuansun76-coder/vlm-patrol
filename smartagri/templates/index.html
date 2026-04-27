@@ -521,31 +521,29 @@
           </div>
         </div>
 
-        <!-- ── Sensors ── -->
+        <!-- ── MQTT (Sensors + Actuator) ── -->
         <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
           <div class="flex items-center gap-2 mb-3">
             <span class="material-symbols-outlined text-yellow-400" style="font-size:16px">sensors</span>
-            <span class="font-headline font-bold text-xs tracking-tight">传感器</span>
+            <span class="font-headline font-bold text-xs tracking-tight">MQTT 传感器 & 执行器</span>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div><label class="text-[10px] text-neutral-500 mb-1 block">Sensor Data URL (HTTP Pull)</label>
-              <input id="s-sensor-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="http://sensor-server/api/latest"></div>
-            <div><label class="text-[10px] text-neutral-500 mb-1 block">MQTT Broker</label>
-              <input id="s-mqtt-broker" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="mqtt://broker-ip:1883"></div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">MQTT Broker Host</label>
+              <input id="s-mqtt-host" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="192.168.1.245"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">MQTT Port</label>
+              <input id="s-mqtt-port" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="1883" value="1883"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">传感器 Topic</label>
+              <input id="s-mqtt-sensor-topic" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="zigbee/sensors"></div>
           </div>
-          <div class="text-[10px] text-neutral-600 mt-2 font-mono">也可通过 POST /api/sensor/push 或 WebSocket 推送数据</div>
-        </div>
-
-        <!-- ── Actuator ── -->
-        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="material-symbols-outlined text-orange-400" style="font-size:16px">water_drop</span>
-            <span class="font-headline font-bold text-xs tracking-tight">执行器 (浇水 / 通风)</span>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">控制 Topic (执行器)</label>
+              <input id="s-mqtt-control-topic" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-orange-500 outline-none" placeholder="greenhouse/control"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">状态 Topic</label>
+              <input id="s-mqtt-status-topic" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-orange-500 outline-none" placeholder="greenhouse/status"></div>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div><label class="text-[10px] text-neutral-500 mb-1 block">Actuator Control URL</label>
-              <input id="s-actuator-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-orange-500 outline-none" placeholder="http://actuator-server/control"></div>
-            <div class="text-[10px] text-neutral-600 flex items-end font-mono pb-2">Agent 发送 POST {"action":"water","enable":true,"duration_sec":300}</div>
+          <div class="text-[10px] text-neutral-600 mt-3 font-mono space-y-1">
+            <div>传感器字段: temperature, moisture, pH, nitrogen, phosphorus, potassium, air_temperature, air_humidity, co2</div>
+            <div>执行器命令: pump/on, pump/off, fan/on, fan/off, light/on, light/off, curtain/on, curtain/off</div>
           </div>
         </div>
 
