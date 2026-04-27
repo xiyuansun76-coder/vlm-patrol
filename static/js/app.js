@@ -118,8 +118,15 @@ async function refreshDashboard() {
     document.getElementById('cfg-yolo-datadir').value = config.yolo.data_dir || './data';
     document.getElementById('cfg-yolo-autotrain').checked = config.yolo.auto_train;
     document.getElementById('cfg-yolo-threshold').value = config.yolo.train_threshold;
+    document.getElementById('cfg-ptz-enabled').checked = config.ptz_enabled || false;
+    document.getElementById('cfg-ptz-url').value = config.ptz_url || '';
+    document.getElementById('cfg-ptz-imgw').value = config.ptz_img_w || 1920;
+    document.getElementById('cfg-ptz-imgh').value = config.ptz_img_h || 1080;
+    document.getElementById('cfg-ptz-fovh').value = config.ptz_fov_h || 55;
+    document.getElementById('cfg-ptz-fovv').value = config.ptz_fov_v || 32;
     document.getElementById('cfg-patrol-enabled').checked = config.patrol.enabled;
     document.getElementById('cfg-patrol-interval').value = config.patrol.interval;
+    document.getElementById('cfg-patrol-strategy').value = config.patrol.strategy || 'single';
     document.getElementById('cfg-agent-enabled').checked = config.agent.auto_analysis;
     document.getElementById('cfg-agent-interval').value = config.agent.interval;
     document.getElementById('cfg-server-host').value = config.server_host || '0.0.0.0';
@@ -322,9 +329,18 @@ async function saveConfig() {
       auto_train: document.getElementById('cfg-yolo-autotrain').checked,
       train_threshold: parseInt(document.getElementById('cfg-yolo-threshold').value) || 50,
     },
+    ptz: {
+      enabled: document.getElementById('cfg-ptz-enabled').checked,
+      url: document.getElementById('cfg-ptz-url').value,
+      image_width: parseInt(document.getElementById('cfg-ptz-imgw').value) || 1920,
+      image_height: parseInt(document.getElementById('cfg-ptz-imgh').value) || 1080,
+      fov_h_deg: parseInt(document.getElementById('cfg-ptz-fovh').value) || 55,
+      fov_v_deg: parseInt(document.getElementById('cfg-ptz-fovv').value) || 32,
+    },
     patrol: {
       enabled: document.getElementById('cfg-patrol-enabled').checked,
       interval_minutes: parseInt(document.getElementById('cfg-patrol-interval').value) || 60,
+      strategy: document.getElementById('cfg-patrol-strategy').value,
     },
     agent: {
       auto_analysis: document.getElementById('cfg-agent-enabled').checked,

@@ -138,10 +138,31 @@
           <input type="number" id="cfg-yolo-threshold" style="width:60px" min="10" value="50"> images
         </label>
 
+        <h2>PTZ Camera (Optional)</h2>
+        <label>
+          <input type="checkbox" id="cfg-ptz-enabled"> Enable PTZ control
+        </label>
+        <label>PTZ URL <input type="text" id="cfg-ptz-url" placeholder="http://192.168.1.100"></label>
+        <label>Image Size
+          <input type="number" id="cfg-ptz-imgw" style="width:80px" value="1920"> x
+          <input type="number" id="cfg-ptz-imgh" style="width:80px" value="1080">
+        </label>
+        <label>FOV (degrees at wide zoom)
+          H <input type="number" id="cfg-ptz-fovh" style="width:50px" value="55">
+          V <input type="number" id="cfg-ptz-fovv" style="width:50px" value="32">
+        </label>
+
         <h2>Patrol</h2>
         <label>
           <input type="checkbox" id="cfg-patrol-enabled"> Enable auto patrol every
           <input type="number" id="cfg-patrol-interval" style="width:60px" min="1" value="60"> minutes
+        </label>
+        <label>Strategy
+          <select id="cfg-patrol-strategy">
+            <option value="single">Single (one snapshot, no PTZ)</option>
+            <option value="sweep">Sweep (PTZ grid scan)</option>
+            <option value="vlm_active">VLM-Active (panorama → focus → diagnose)</option>
+          </select>
         </label>
 
         <h2>Agent</h2>

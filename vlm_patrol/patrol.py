@@ -1,4 +1,8 @@
-"""Patrol core — grab image → VLM detect → filter → collect → YOLO train → loop."""
+"""Patrol core — supports 3 strategies depending on hardware:
+  - single:     one snapshot (no PTZ needed)
+  - sweep:      PTZ grid scan, VLM detect at each position
+  - vlm_active: panorama → VLM grounding → PTZ focus each plant → close-up diagnose
+"""
 
 import asyncio
 import logging
@@ -13,9 +17,7 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-# Minimum VLM confidence to accept a pseudo-label
 MIN_CONFIDENCE = 0.5
-# Fraction of collected images routed to val split
 VAL_RATIO = 0.2
 
 
@@ -28,53 +30,63 @@ class PlantRecord:
     bbox: list = field(default_factory=list)
     details: str = ""
     timestamp: str = ""
+    ptz_az: int = 0
+    ptz_el: int = 0
 
     def to_dict(self):
         return {
             "id": self.id, "type": self.type, "health": self.health,
             "confidence": self.confidence, "bbox": self.bbox,
             "details": self.details, "timestamp": self.timestamp,
+            "ptz_az": self.ptz_az, "ptz_el": self.ptz_el,
         }
 
 
 @dataclass
 class PatrolSession:
     session_id: str = ""
-    status: str = "idle"       # idle, running, completed, error
+    status: str = "idle"
+    strategy: str = "single"
     started_at: str = ""
     plants: list = field(default_factory=list)
     errors: list = field(default_factory=list)
     images_collected: int = 0
-    yolo_detections: int = 0   # plants found by YOLO (after training)
+    yolo_detections: int = 0
+    ptz_travel: float = 0.0
 
     def to_dict(self):
         return {
             "session_id": self.session_id, "status": self.status,
-            "started_at": self.started_at,
+            "strategy": self.strategy, "started_at": self.started_at,
             "plants": [p.to_dict() for p in self.plants],
             "errors": self.errors, "images_collected": self.images_collected,
-            "yolo_detections": self.yolo_detections,
+            "yolo_detections": self.yolo_detections, "ptz_travel": round(self.ptz_travel, 1),
         }
 
 
 class Patrol:
-    """Core patrol loop: snapshot → VLM detect → filter → collect → YOLO distill."""
+    """Patrol controller with 3 strategies."""
 
-    def __init__(self, config, vlm, yolo_mgr):
+    def __init__(self, config, vlm, yolo_mgr, ptz=None):
         self.cfg = config
         self.vlm = vlm
         self.yolo = yolo_mgr
+        self.ptz = ptz  # None if no PTZ camera
         self.http = httpx.AsyncClient(timeout=15)
         self.session: PatrolSession | None = None
         self._running = False
-        self._collect_count = 0  # total images collected, for train/val split
+        self._collect_count = 0
         self.history: list[dict] = []
 
     async def snapshot(self) -> bytes | None:
-        """Grab image from camera_snapshot_url."""
+        """Grab image — via PTZ ISAPI if available, otherwise HTTP GET."""
+        if self.ptz:
+            img = await self.ptz.snapshot()
+            if img:
+                return img
         url = self.cfg.camera_snapshot_url
         if not url:
-            log.warning("No camera_snapshot_url configured")
+            log.warning("No camera source configured")
             return None
         try:
             resp = await self.http.get(url)
@@ -85,22 +97,17 @@ class Patrol:
             return None
 
     def _pick_split(self) -> str:
-        """Route ~20% of images to val, rest to train."""
         self._collect_count += 1
         return "val" if random.random() < VAL_RATIO else "train"
 
     def _filter_labels(self, plants: list[dict]) -> list[dict]:
-        """Filter pseudo-labels: known class + sufficient bbox area."""
         labels = []
         for p in plants:
             cls_name = p["type"]
             if cls_name not in self.cfg.classes:
                 continue
             bbox = p["bbox"]
-            # reject tiny boxes (likely noise)
-            bw = bbox[2] - bbox[0]
-            bh = bbox[3] - bbox[1]
-            if bw < 10 or bh < 10:
+            if (bbox[2] - bbox[0]) < 10 or (bbox[3] - bbox[1]) < 10:
                 continue
             labels.append({
                 "class_id": self.cfg.classes.index(cls_name),
@@ -108,67 +115,183 @@ class Patrol:
             })
         return labels
 
-    async def run_once(self, sensor_data: dict = None) -> PatrolSession:
-        """Single patrol cycle: snapshot → VLM detect → filter → collect → diagnose."""
+    def _collect_image(self, image: bytes, plants: list[dict], session: PatrolSession):
+        """Filter pseudo-labels and save for YOLO training."""
+        labels = self._filter_labels(plants)
+        if labels:
+            split = self._pick_split()
+            fname = f"patrol_{session.session_id}_{int(time.time())}_{random.randint(0,999):03d}.jpg"
+            self.yolo.collect(image, fname, labels, split=split)
+            session.images_collected += 1
+            log.info("Collected %s → %s (%d labels)", fname, split, len(labels))
+
+    # ── Strategy: single (no PTZ) ──
+
+    async def _run_single(self, session: PatrolSession, sensor_data: dict = None):
+        """One snapshot → VLM detect → collect."""
+        image = await self.snapshot()
+        if not image:
+            session.errors.append("Failed to get camera image")
+            return
+
+        img_w = self.cfg.ptz_img_w if self.cfg.ptz_enabled else 1920
+        img_h = self.cfg.ptz_img_h if self.cfg.ptz_enabled else 1080
+
+        plants = await self.vlm.grounding_detect(image, img_w, img_h)
+        log.info("Single: VLM detected %d plants", len(plants))
+
+        self._collect_image(image, plants, session)
+
+        for p in plants:
+            session.plants.append(PlantRecord(
+                id=str(uuid.uuid4())[:8], type=p["type"], health=p["health"],
+                bbox=p["bbox"], details=p.get("description", ""),
+                timestamp=datetime.now().isoformat(),
+            ))
+
+    # ── Strategy: sweep (PTZ grid scan) ──
+
+    async def _run_sweep(self, session: PatrolSession, sensor_data: dict = None):
+        """Grid scan: move PTZ to each position → snapshot → VLM detect → collect."""
+        if not self.ptz:
+            log.warning("Sweep requires PTZ, falling back to single")
+            return await self._run_single(session, sensor_data)
+
+        self.ptz.reset_travel()
+        positions = self.ptz.generate_scan_positions()
+        img_w, img_h = self.cfg.ptz_img_w, self.cfg.ptz_img_h
+
+        for i, (az, el, zoom) in enumerate(positions):
+            if not self._running:
+                break
+            await self.ptz.goto(az, el, zoom)
+            image = await self.ptz.snapshot()
+            if not image:
+                session.errors.append(f"Snapshot failed at position {i}")
+                continue
+
+            plants = await self.vlm.grounding_detect(image, img_w, img_h)
+            log.info("Sweep pos %d/%d (az=%d el=%d): %d plants",
+                     i + 1, len(positions), az, el, len(plants))
+
+            self._collect_image(image, plants, session)
+
+            for p in plants:
+                session.plants.append(PlantRecord(
+                    id=str(uuid.uuid4())[:8], type=p["type"], health=p["health"],
+                    bbox=p["bbox"], details=p.get("description", ""),
+                    timestamp=datetime.now().isoformat(),
+                    ptz_az=az, ptz_el=el,
+                ))
+
+        await self.ptz.go_home()
+        session.ptz_travel = self.ptz.total_travel
+
+    # ── Strategy: vlm_active (panorama → focus → diagnose) ──
+
+    async def _run_vlm_active(self, session: PatrolSession, sensor_data: dict = None):
+        """VLM-Active: panorama → grounding → PTZ focus each plant → close-up diagnose."""
+        if not self.ptz:
+            log.warning("VLM-Active requires PTZ, falling back to single")
+            return await self._run_single(session, sensor_data)
+
+        self.ptz.reset_travel()
+        img_w, img_h = self.cfg.ptz_img_w, self.cfg.ptz_img_h
+
+        # 1. Go home for wide-angle panorama
+        await self.ptz.go_home()
+        ref_az, ref_el, _ = await self.ptz.get_position()
+        panorama = await self.ptz.snapshot()
+        if not panorama:
+            session.errors.append("Panorama snapshot failed")
+            return
+
+        # 2. VLM grounding on panorama
+        plants = await self.vlm.grounding_detect(panorama, img_w, img_h)
+        log.info("VLM-Active: panorama detected %d plants", len(plants))
+
+        # Collect panorama pseudo-labels
+        self._collect_image(panorama, plants, session)
+
+        # 3. Focus on each plant → close-up → diagnose
+        for i, p in enumerate(plants):
+            if not self._running:
+                break
+
+            bbox = p["bbox"]
+            cls_name = p["type"]
+            log.info("Focusing on plant %d/%d: %s at bbox %s", i + 1, len(plants), cls_name, bbox)
+
+            # Move PTZ to plant
+            await self.ptz.focus_on_bbox(bbox, ref_az, ref_el)
+            closeup = await self.ptz.snapshot()
+            if not closeup:
+                session.errors.append(f"Close-up snapshot failed for plant {i}")
+                continue
+
+            # VLM diagnosis on close-up
+            diag = await self.vlm.diagnose(closeup, sensor_data)
+
+            # Collect close-up image with VLM label
+            if diag.get("bbox") and diag.get("type") in self.cfg.classes:
+                self._collect_image(closeup, [{
+                    "type": diag["type"],
+                    "bbox": diag["bbox"],
+                }], session)
+
+            cur_az, cur_el, _ = await self.ptz.get_position()
+            session.plants.append(PlantRecord(
+                id=str(uuid.uuid4())[:8],
+                type=diag.get("type", cls_name),
+                health=diag.get("health", p["health"]),
+                confidence=diag.get("confidence", 0),
+                bbox=bbox,
+                details=diag.get("details", ""),
+                timestamp=datetime.now().isoformat(),
+                ptz_az=cur_az, ptz_el=cur_el,
+            ))
+
+        await self.ptz.go_home()
+        session.ptz_travel = self.ptz.total_travel
+
+    # ── Main entry ──
+
+    async def run_once(self, sensor_data: dict = None,
+                       strategy: str = None) -> PatrolSession:
+        """Run one patrol cycle with the specified strategy."""
+        strategy = strategy or self.cfg.patrol_strategy
         session = PatrolSession(
             session_id=str(uuid.uuid4())[:8],
             status="running",
+            strategy=strategy,
             started_at=datetime.now().isoformat(),
         )
         self.session = session
 
         try:
-            # 1. Grab image
-            image = await self.snapshot()
-            if not image:
-                session.status = "error"
-                session.errors.append("Failed to get camera image")
-                return session
+            if strategy == "vlm_active" and self.ptz:
+                await self._run_vlm_active(session, sensor_data)
+            elif strategy == "sweep" and self.ptz:
+                await self._run_sweep(session, sensor_data)
+            else:
+                await self._run_single(session, sensor_data)
 
-            img_w = self.cfg.ptz_img_w if self.cfg.ptz_enabled else 1920
-            img_h = self.cfg.ptz_img_h if self.cfg.ptz_enabled else 1080
-
-            # 2. Try YOLO first (fast, if model is trained)
-            yolo_plants = []
+            # YOLO fast detect for comparison (if model trained)
             if self.yolo.model is not None:
                 try:
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                        tmp.write(image)
-                        tmp_path = tmp.name
-                    yolo_plants = self.yolo.detect(tmp_path)
-                    Path(tmp_path).unlink(missing_ok=True)
-                    session.yolo_detections = len(yolo_plants)
-                    log.info("YOLO detected %d plants", len(yolo_plants))
+                    image = await self.snapshot()
+                    if image:
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                            tmp.write(image)
+                            tmp_path = tmp.name
+                        yolo_dets = self.yolo.detect(tmp_path)
+                        session.yolo_detections = len(yolo_dets)
+                        Path(tmp_path).unlink(missing_ok=True)
                 except Exception as e:
                     log.warning("YOLO detect failed: %s", e)
 
-            # 3. VLM grounding detection (always — for pseudo-label generation)
-            vlm_plants = await self.vlm.grounding_detect(image, img_w, img_h)
-            log.info("VLM detected %d plants", len(vlm_plants))
-
-            # 4. Filter and collect for YOLO training
-            labels = self._filter_labels(vlm_plants)
-            if labels:
-                split = self._pick_split()
-                fname = f"patrol_{session.session_id}_{int(time.time())}.jpg"
-                self.yolo.collect(image, fname, labels, split=split)
-                session.images_collected += 1
-                log.info("Collected %s → %s (%d labels)", fname, split, len(labels))
-
-            # 5. Build plant records (merge VLM + YOLO results)
-            for p in vlm_plants:
-                record = PlantRecord(
-                    id=str(uuid.uuid4())[:8],
-                    type=p["type"],
-                    health=p["health"],
-                    bbox=p["bbox"],
-                    details=p.get("description", ""),
-                    timestamp=datetime.now().isoformat(),
-                )
-                session.plants.append(record)
-
-            # 6. Auto-train check
+            # Auto-train check
             if self.yolo.should_train():
                 log.info("Dataset threshold reached (%d images), triggering YOLO training",
                          self.yolo.dataset_size())
@@ -181,7 +304,6 @@ class Patrol:
             session.status = "error"
             session.errors.append(str(e))
 
-        # Save to history
         self.history.append(session.to_dict())
         if len(self.history) > 100:
             self.history = self.history[-100:]
@@ -190,21 +312,21 @@ class Patrol:
         return session
 
     async def _train_background(self):
-        """Run YOLO training in background thread."""
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, self.yolo.train)
         log.info("Background training result: %s", result)
 
     async def run_continuous(self, sensor_data: dict = None):
-        """Run patrol in a loop at configured interval."""
         self._running = True
-        log.info("Continuous patrol started (every %d min)", self.cfg.patrol_interval)
+        log.info("Continuous patrol started (every %d min, strategy=%s)",
+                 self.cfg.patrol_interval, self.cfg.patrol_strategy)
         while self._running:
             await self.run_once(sensor_data)
             await asyncio.sleep(self.cfg.patrol_interval * 60)
 
     def stop(self):
         self._running = False
+        log.info("Patrol stopped")
 
     def get_status(self) -> dict:
         return {

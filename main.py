@@ -23,7 +23,15 @@ log = logging.getLogger("vlm-patrol")
 cfg = Config()
 vlm = VLM(cfg)
 yolo_mgr = YOLOManager(cfg)
-patrol = Patrol(cfg, vlm, yolo_mgr)
+
+# Initialize PTZ if configured
+ptz = None
+if cfg.ptz_enabled and cfg.ptz_url:
+    from vlm_patrol.ptz import PTZController
+    ptz = PTZController(cfg)
+    log.info("PTZ enabled: %s", cfg.ptz_url)
+
+patrol = Patrol(cfg, vlm, yolo_mgr, ptz=ptz)
 agent = Agent(cfg, vlm, patrol)
 
 app = FastAPI(title="VLM-Patrol", version="0.1.0")
@@ -44,11 +52,12 @@ async def index():
 # ── Patrol API ──
 
 @app.post("/api/patrol/start")
-async def patrol_start():
+async def patrol_start(strategy: str = None):
+    """Start patrol. strategy: single, sweep, vlm_active (default from config)."""
     if patrol._running:
         return {"status": "already_running"}
-    asyncio.create_task(patrol.run_once())
-    return {"status": "started"}
+    asyncio.create_task(patrol.run_once(strategy=strategy))
+    return {"status": "started", "strategy": strategy or cfg.patrol_strategy}
 
 
 @app.post("/api/patrol/stop")
@@ -60,6 +69,49 @@ async def patrol_stop():
 @app.get("/api/patrol/status")
 async def patrol_status():
     return patrol.get_status()
+
+
+@app.get("/api/patrol/history")
+async def patrol_history():
+    return patrol.history
+
+
+# ── PTZ API (optional, only works if PTZ configured) ──
+
+@app.get("/api/ptz/status")
+async def ptz_status():
+    if not ptz:
+        return {"enabled": False}
+    az, el, zoom = await ptz.get_position()
+    return {"enabled": True, "az": az, "el": el, "zoom": zoom,
+            "travel": round(ptz.total_travel, 1)}
+
+
+@app.post("/api/ptz/goto")
+async def ptz_goto(az: int, el: int, zoom: int = 10):
+    if not ptz:
+        return {"error": "PTZ not configured"}
+    ok = await ptz.goto(az, el, zoom)
+    return {"status": "ok" if ok else "failed"}
+
+
+@app.post("/api/ptz/home")
+async def ptz_home():
+    if not ptz:
+        return {"error": "PTZ not configured"}
+    ok = await ptz.go_home()
+    return {"status": "ok" if ok else "failed"}
+
+
+@app.get("/api/ptz/snapshot")
+async def ptz_snapshot():
+    if not ptz:
+        return JSONResponse({"error": "PTZ not configured"}, 400)
+    img = await ptz.snapshot()
+    if img:
+        from fastapi.responses import Response
+        return Response(content=img, media_type="image/jpeg")
+    return JSONResponse({"error": "snapshot failed"}, 500)
 
 
 # ── Agent API ──
@@ -179,6 +231,12 @@ async def get_config():
         "camera": {"snapshot_url": cfg.camera_snapshot_url, "stream_url": cfg.camera_stream_url},
         "sensor_url": cfg.sensor_url,
         "actuator_url": cfg.actuator_url,
+        "ptz_enabled": cfg.ptz_enabled,
+        "ptz_url": cfg.ptz_url,
+        "ptz_img_w": cfg.ptz_img_w,
+        "ptz_img_h": cfg.ptz_img_h,
+        "ptz_fov_h": cfg.ptz_fov_h,
+        "ptz_fov_v": cfg.ptz_fov_v,
         "classes": cfg.classes,
         "patrol": {"enabled": cfg.patrol_enabled, "interval": cfg.patrol_interval, "strategy": cfg.patrol_strategy},
         "agent": {"auto_analysis": cfg.agent_auto_analysis, "interval": cfg.agent_interval},
@@ -198,6 +256,7 @@ async def save_config(data: dict):
     camera = data.get("camera", {})
     sensor = data.get("sensor", {})
     actuator = data.get("actuator", {})
+    ptz_cfg = data.get("ptz", {})
     yolo = data.get("yolo", {})
     patrol_cfg = data.get("patrol", {})
     agent_cfg = data.get("agent", {})
@@ -211,6 +270,18 @@ async def save_config(data: dict):
         "camera": {
             "snapshot_url": camera.get("snapshot_url", cfg.camera_snapshot_url),
             "stream_url": camera.get("stream_url", cfg.camera_stream_url),
+            "ptz": {
+                "enabled": ptz_cfg.get("enabled", cfg.ptz_enabled),
+                "url": ptz_cfg.get("url", cfg.ptz_url),
+                "fov_h_deg": ptz_cfg.get("fov_h_deg", cfg.ptz_fov_h),
+                "fov_v_deg": ptz_cfg.get("fov_v_deg", cfg.ptz_fov_v),
+                "image_width": ptz_cfg.get("image_width", cfg.ptz_img_w),
+                "image_height": ptz_cfg.get("image_height", cfg.ptz_img_h),
+                "home_az": cfg.ptz_home_az,
+                "home_el": cfg.ptz_home_el,
+                "wide_zoom": cfg.ptz_wide_zoom,
+                "close_zoom": cfg.ptz_close_zoom,
+            },
         },
         "sensor": {
             "url": sensor.get("url", cfg.sensor_url),
@@ -228,7 +299,7 @@ async def save_config(data: dict):
         "patrol": {
             "enabled": patrol_cfg.get("enabled", cfg.patrol_enabled),
             "interval_minutes": patrol_cfg.get("interval_minutes", cfg.patrol_interval),
-            "strategy": cfg.patrol_strategy,
+            "strategy": patrol_cfg.get("strategy", cfg.patrol_strategy),
         },
         "agent": {
             "auto_analysis": agent_cfg.get("auto_analysis", cfg.agent_auto_analysis),
@@ -260,10 +331,28 @@ async def save_config(data: dict):
     cfg.yolo_data_dir = Path(yaml_data["yolo"]["data_dir"])
     cfg.yolo_auto_train = yaml_data["yolo"]["auto_train"]
     cfg.yolo_train_threshold = yaml_data["yolo"]["train_threshold"]
+    cfg.ptz_enabled = yaml_data["camera"]["ptz"]["enabled"]
+    cfg.ptz_url = yaml_data["camera"]["ptz"]["url"]
+    cfg.ptz_fov_h = yaml_data["camera"]["ptz"]["fov_h_deg"]
+    cfg.ptz_fov_v = yaml_data["camera"]["ptz"]["fov_v_deg"]
+    cfg.ptz_img_w = yaml_data["camera"]["ptz"]["image_width"]
+    cfg.ptz_img_h = yaml_data["camera"]["ptz"]["image_height"]
     cfg.patrol_enabled = yaml_data["patrol"]["enabled"]
     cfg.patrol_interval = yaml_data["patrol"]["interval_minutes"]
+    cfg.patrol_strategy = yaml_data["patrol"]["strategy"]
     cfg.agent_auto_analysis = yaml_data["agent"]["auto_analysis"]
     cfg.agent_interval = yaml_data["agent"]["interval_minutes"]
+
+    # Re-initialize PTZ controller if settings changed
+    global ptz
+    if cfg.ptz_enabled and cfg.ptz_url:
+        from vlm_patrol.ptz import PTZController
+        ptz = PTZController(cfg)
+        patrol.ptz = ptz
+        log.info("PTZ re-initialized: %s", cfg.ptz_url)
+    else:
+        ptz = None
+        patrol.ptz = None
 
     # Apply API key if provided (not saved to yaml, stays in env/.env)
     api_key = llm.get("api_key", "")
