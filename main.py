@@ -5,9 +5,9 @@ import logging
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Request, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 import uvicorn
 
 from vlm_patrol.config import Config
@@ -37,17 +37,60 @@ agent = Agent(cfg, vlm, patrol)
 
 app = FastAPI(title="VLM-Patrol", version="0.1.0")
 
-# Serve static frontend
-static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# SmartAgri templates
+templates_dir = Path(__file__).parent / "smartagri" / "templates"
+
+# Login config from env
+import os
+_LOGIN_USER = os.environ.get("SMARTAGRI_USER", "admin")
+_LOGIN_PASS = os.environ.get("SMARTAGRI_PASS", "admin")
+_SESSION_SECRET = os.environ.get("SMARTAGRI_SESSION_SECRET", "vlm-patrol-session")
+
+import hmac, hashlib
+_SESSION_TOKEN = hmac.new(
+    _SESSION_SECRET.encode(), b"authenticated", hashlib.sha256
+).hexdigest()
+
+
+def _valid_session(request: Request) -> bool:
+    return request.cookies.get("sid") == _SESSION_TOKEN
 
 
 # ── Pages ──
 
-@app.get("/")
-async def index():
-    return FileResponse(str(static_dir / "index.html"))
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    if not _valid_session(request):
+        return RedirectResponse("/login", status_code=302)
+    html = (templates_dir / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store"})
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    if _valid_session(request):
+        return RedirectResponse("/", status_code=302)
+    return HTMLResponse((templates_dir / "login.html").read_text(encoding="utf-8"))
+
+
+@app.post("/login")
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    if username == _LOGIN_USER and password == _LOGIN_PASS:
+        response = RedirectResponse("/", status_code=302)
+        response.set_cookie(key="sid", value=_SESSION_TOKEN, httponly=True,
+                            samesite="lax", max_age=86400 * 7)
+        return response
+    html = (templates_dir / "login.html").read_text(encoding="utf-8")
+    html = html.replace("<!--ERROR_PLACEHOLDER-->",
+                        '<p class="text-error text-xs text-center font-mono">Invalid credentials</p>')
+    return HTMLResponse(html, status_code=401)
+
+
+@app.post("/logout")
+async def logout():
+    response = RedirectResponse("/login", status_code=302)
+    response.delete_cookie("sid")
+    return response
 
 
 # ── Patrol API ──
