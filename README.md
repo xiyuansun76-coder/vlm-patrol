@@ -19,6 +19,16 @@ The VLM (Vision Language Model) acts as a teacher: it detects plants with boundi
 ```bash
 git clone https://github.com/xiyuansun76-coder/vlm-patrol.git
 cd vlm-patrol
+bash setup.sh            # creates venv, installs deps, copies config
+source venv/bin/activate
+python main.py
+```
+
+Or manually:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp config.example.yaml config.yaml
 python main.py
