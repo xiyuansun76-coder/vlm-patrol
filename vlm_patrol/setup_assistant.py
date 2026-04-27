@@ -1,97 +1,271 @@
 """Setup assistant — handles configuration through chat conversation.
 
-Uses a lightweight LLM (NVIDIA API or local) for natural language intent
-detection, with keyword fallback when LLM is unavailable.
+Security & performance:
+1. API Key AES encryption at rest (Fernet)
+2. Request rate limiting (per-minute cap)
+3. Local Ollama preferred over cloud API
+4. Intent cache (LRU) for repeated similar queries
 
-Supported intents:
-- Camera/PTZ setup and testing
-- LLM API configuration and testing
-- YOLO setup
-- Sensor/actuator configuration
-- Guided initial setup wizard
-- Patrol control
+Falls back to keyword matching when no LLM is available.
 """
 
+import base64
+import hashlib
 import json
 import logging
 import os
 import re
+import time
+from collections import OrderedDict
+from pathlib import Path
+
 import httpx
 
 log = logging.getLogger(__name__)
 
-# ── Intent LLM configuration ──
-# Uses a small fast model for intent classification only.
-# Configurable via env vars or falls back to keyword matching.
 
+# ═══════════════════════════════════════════════════════════
+# 1. API Key encryption (AES via Fernet)
+# ═══════════════════════════════════════════════════════════
+
+def _derive_fernet_key(passphrase: str) -> bytes:
+    """Derive a Fernet-compatible key from a passphrase."""
+    digest = hashlib.sha256(passphrase.encode()).digest()
+    return base64.urlsafe_b64encode(digest)
+
+
+def encrypt_api_key(api_key: str, passphrase: str = "") -> str:
+    """Encrypt an API key. Returns base64 ciphertext."""
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError:
+        log.warning("cryptography not installed — storing key as base64 only")
+        return "b64:" + base64.b64encode(api_key.encode()).decode()
+
+    secret = passphrase or os.environ.get("VLP_SECRET", "vlm-patrol-default-key")
+    f = Fernet(_derive_fernet_key(secret))
+    return "enc:" + f.encrypt(api_key.encode()).decode()
+
+
+def decrypt_api_key(token: str, passphrase: str = "") -> str:
+    """Decrypt an API key. Handles enc:, b64:, and plaintext."""
+    if token.startswith("enc:"):
+        try:
+            from cryptography.fernet import Fernet
+        except ImportError:
+            log.error("cryptography not installed — cannot decrypt key")
+            return ""
+        secret = passphrase or os.environ.get("VLP_SECRET", "vlm-patrol-default-key")
+        f = Fernet(_derive_fernet_key(secret))
+        return f.decrypt(token[4:].encode()).decode()
+    if token.startswith("b64:"):
+        return base64.b64decode(token[4:]).decode()
+    return token  # plaintext
+
+
+# ═══════════════════════════════════════════════════════════
+# 2. Rate limiter (token bucket)
+# ═══════════════════════════════════════════════════════════
+
+class RateLimiter:
+    """Simple token-bucket rate limiter."""
+
+    def __init__(self, max_calls: int = 20, period_sec: float = 60):
+        self.max_calls = max_calls
+        self.period = period_sec
+        self._calls: list[float] = []
+
+    def allow(self) -> bool:
+        now = time.monotonic()
+        self._calls = [t for t in self._calls if now - t < self.period]
+        if len(self._calls) >= self.max_calls:
+            return False
+        self._calls.append(now)
+        return True
+
+    @property
+    def remaining(self) -> int:
+        now = time.monotonic()
+        self._calls = [t for t in self._calls if now - t < self.period]
+        return max(0, self.max_calls - len(self._calls))
+
+
+_rate_limiter = RateLimiter(
+    max_calls=int(os.environ.get("INTENT_RATE_LIMIT", "20")),
+    period_sec=60,
+)
+
+
+# ═══════════════════════════════════════════════════════════
+# 3. Intent cache (LRU)
+# ═══════════════════════════════════════════════════════════
+
+class LRUCache:
+    """Simple LRU cache with TTL."""
+
+    def __init__(self, maxsize: int = 128, ttl_sec: float = 300):
+        self._cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+        self.maxsize = maxsize
+        self.ttl = ttl_sec
+
+    def _normalize_key(self, message: str) -> str:
+        """Normalize message for cache lookup — lowercase, strip, collapse whitespace."""
+        return re.sub(r'\s+', ' ', message.lower().strip())
+
+    def get(self, message: str) -> dict | None:
+        key = self._normalize_key(message)
+        if key in self._cache:
+            ts, val = self._cache[key]
+            if time.monotonic() - ts < self.ttl:
+                self._cache.move_to_end(key)
+                log.debug("Intent cache hit: %s", key[:40])
+                return val
+            del self._cache[key]
+        return None
+
+    def put(self, message: str, result: dict):
+        key = self._normalize_key(message)
+        self._cache[key] = (time.monotonic(), result)
+        if len(self._cache) > self.maxsize:
+            self._cache.popitem(last=False)
+
+
+_intent_cache = LRUCache(
+    maxsize=int(os.environ.get("INTENT_CACHE_SIZE", "128")),
+    ttl_sec=float(os.environ.get("INTENT_CACHE_TTL", "300")),
+)
+
+
+# ═══════════════════════════════════════════════════════════
+# 4. Intent LLM — local Ollama first, then cloud API
+# ═══════════════════════════════════════════════════════════
+
+# Cloud config (NVIDIA etc.)
 INTENT_LLM_URL = os.environ.get(
     "INTENT_LLM_URL",
-    "https://integrate.api.nvidia.com/v1/chat/completions"
+    "https://integrate.api.nvidia.com/v1/chat/completions",
 )
 INTENT_LLM_MODEL = os.environ.get("INTENT_LLM_MODEL", "meta/llama-3.1-8b-instruct")
-INTENT_LLM_KEY = os.environ.get("INTENT_LLM_KEY", os.environ.get("LLM_API_KEY", ""))
+_raw_key = os.environ.get("INTENT_LLM_KEY", os.environ.get("LLM_API_KEY", ""))
+INTENT_LLM_KEY = decrypt_api_key(_raw_key) if _raw_key else ""
 
-INTENT_PROMPT = """You are an intent classifier for a plant monitoring system setup assistant.
-Given a user message, extract the intent and any parameters.
+# Local Ollama config
+LOCAL_INTENT_URL = os.environ.get(
+    "LOCAL_INTENT_URL",
+    "http://localhost:11434/v1/chat/completions",
+)
+LOCAL_INTENT_MODEL = os.environ.get("LOCAL_INTENT_MODEL", "qwen3:0.6b")
+
+INTENT_PROMPT = """You are an intent classifier for a plant monitoring system.
+Given a user message, extract the intent and parameters.
 
 Possible intents:
-- camera: user wants to configure or check camera/PTZ (may include IP or URL)
-- llm: user wants to configure or check the LLM/AI model API (may include URL, model name)
-- yolo: user wants to check, install, or configure YOLO detection
-- sensor: user wants to configure sensor data source (may include URL)
-- actuator: user wants to configure actuator/control endpoint (may include URL)
-- setup: user wants a general system status check or guided setup
-- patrol: user wants to configure or control patrol (may include strategy name)
-- none: message is not about system configuration at all
+- camera: configure or check camera/PTZ (may include IP or URL)
+- llm: configure or check LLM/AI model API (may include URL, model name)
+- yolo: check, install, or configure YOLO detection
+- sensor: configure sensor data source (may include URL)
+- actuator: configure actuator/control endpoint (may include URL)
+- setup: general system status check or guided setup
+- patrol: configure or control patrol (may include strategy name)
+- none: not about system configuration
 
-Reply with ONLY a JSON object, no other text:
+Reply with ONLY a JSON object:
 {"intent": "camera", "ip": "192.168.1.100", "url": null, "model": null, "action": null, "extra": null}
 
-Rules:
-- intent: the primary intent (pick the most specific one)
-- ip: extracted IP address if any, null otherwise
-- url: extracted full URL (http/https) if any, null otherwise
-- model: model name if mentioned (e.g. "qwen3-vl:8b", "llava"), null otherwise
-- action: specific action like "install", "start", "stop", "test", "status", "vlm_active", "sweep", null if unclear
-- extra: any other relevant extracted info, null if none
+Fields:
+- intent: primary intent
+- ip: IP address if present, null otherwise
+- url: full URL (http/https) if present, null otherwise
+- model: model name if mentioned, null otherwise
+- action: "install"/"start"/"stop"/"test"/"status"/"vlm_active"/"sweep", null if unclear
+- extra: other relevant info, null if none
 
 User message: """
 
 
-async def _llm_detect_intent(message: str) -> dict | None:
-    """Use a lightweight LLM to classify intent. Returns parsed dict or None on failure."""
-    if not INTENT_LLM_KEY:
-        return None
+async def _try_local_ollama() -> bool:
+    """Check if local Ollama is available."""
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            r = await c.get("http://localhost:11434/api/tags")
+            return r.status_code == 200
+    except Exception:
+        return False
 
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {INTENT_LLM_KEY}",
-    }
+
+async def _call_intent_llm(message: str, url: str, model: str, api_key: str = "") -> dict | None:
+    """Call an OpenAI-compatible LLM for intent classification."""
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     try:
         async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.post(INTENT_LLM_URL, json={
-                "model": INTENT_LLM_MODEL,
+            r = await c.post(url, json={
+                "model": model,
                 "messages": [{"role": "user", "content": INTENT_PROMPT + message}],
                 "max_tokens": 150,
                 "temperature": 0,
             }, headers=headers)
             if r.status_code != 200:
-                log.debug("Intent LLM returned %d", r.status_code)
+                log.debug("Intent LLM %s returned %d", url[:40], r.status_code)
                 return None
             data = r.json()
             reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            # Extract JSON from reply
             m = re.search(r'\{[^}]+\}', reply)
             if m:
                 parsed = json.loads(m.group())
-                log.info("Intent LLM: %s → %s", message[:50], parsed.get("intent"))
                 return parsed
     except Exception as e:
-        log.debug("Intent LLM failed: %s", e)
+        log.debug("Intent LLM %s failed: %s", url[:40], e)
     return None
 
 
-# ── Keyword fallback ──
+async def _llm_detect_intent(message: str) -> dict | None:
+    """
+    Detect intent via LLM. Priority:
+    1. Cache hit → return immediately
+    2. Local Ollama → fast, private, free
+    3. Cloud API (NVIDIA) → fallback
+    4. None → keyword fallback
+    """
+    # Check cache
+    cached = _intent_cache.get(message)
+    if cached is not None:
+        return cached
+
+    # Rate limit check
+    if not _rate_limiter.allow():
+        log.warning("Intent LLM rate limited (%d/%d calls used)",
+                     _rate_limiter.max_calls - _rate_limiter.remaining,
+                     _rate_limiter.max_calls)
+        return None
+
+    result = None
+
+    # Try local Ollama first
+    if await _try_local_ollama():
+        result = await _call_intent_llm(message, LOCAL_INTENT_URL, LOCAL_INTENT_MODEL)
+        if result:
+            log.info("Intent (local %s): %s → %s",
+                     LOCAL_INTENT_MODEL, message[:40], result.get("intent"))
+
+    # Fall back to cloud API
+    if not result and INTENT_LLM_KEY:
+        result = await _call_intent_llm(message, INTENT_LLM_URL, INTENT_LLM_MODEL, INTENT_LLM_KEY)
+        if result:
+            log.info("Intent (cloud %s): %s → %s",
+                     INTENT_LLM_MODEL, message[:40], result.get("intent"))
+
+    # Cache the result
+    if result:
+        _intent_cache.put(message, result)
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════
+# Keyword fallback
+# ═══════════════════════════════════════════════════════════
 
 SETUP_KEYWORDS = {
     "camera": ["摄像头", "camera", "相机", "监控", "球机", "ptz", "海康", "hikvision", "大华"],
@@ -118,15 +292,12 @@ def _keyword_detect_intent(message: str) -> dict:
     if not intents:
         return {"intent": "none"}
 
-    # Pick most specific intent (prefer camera/llm/yolo over generic setup/status)
     specific = [i for i in intents if i not in ("setup", "status")]
     primary = specific[0] if specific else intents[0]
 
-    # Extract params with regex
     ip_m = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', message)
     url_m = re.search(r'(https?://\S+)', message)
 
-    # Detect action keywords
     action = None
     for a, words in [
         ("install", ["install", "安装"]),
@@ -141,7 +312,6 @@ def _keyword_detect_intent(message: str) -> dict:
             action = a
             break
 
-    # Detect model name
     model = None
     for m in ["qwen3-vl:8b", "qwen2.5-vl:7b", "llava", "gemma", "llama"]:
         if m.split(":")[0] in msg or m.split("-")[0] in msg:
@@ -159,10 +329,11 @@ def _keyword_detect_intent(message: str) -> dict:
     }
 
 
-# ── Test functions ──
+# ═══════════════════════════════════════════════════════════
+# Test functions
+# ═══════════════════════════════════════════════════════════
 
 async def test_camera(url: str) -> dict:
-    """Test if a camera URL returns an image."""
     try:
         async with httpx.AsyncClient(timeout=8) as c:
             r = await c.get(url)
@@ -176,7 +347,6 @@ async def test_camera(url: str) -> dict:
 
 
 async def test_ptz(url: str, user: str, pwd: str) -> dict:
-    """Test if a PTZ camera responds to ISAPI."""
     try:
         async with httpx.AsyncClient(auth=httpx.DigestAuth(user, pwd), timeout=8) as c:
             r = await c.get(url.rstrip("/") + "/ISAPI/PTZCtrl/channels/1/status")
@@ -191,7 +361,6 @@ async def test_ptz(url: str, user: str, pwd: str) -> dict:
 
 
 async def test_llm(url: str, model: str, api_key: str = "") -> dict:
-    """Test if LLM API responds."""
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -212,7 +381,6 @@ async def test_llm(url: str, model: str, api_key: str = "") -> dict:
 
 
 async def test_yolo() -> dict:
-    """Test if ultralytics is available."""
     try:
         import ultralytics
         return {"ok": True, "version": ultralytics.__version__}
@@ -220,15 +388,16 @@ async def test_yolo() -> dict:
         return {"ok": False, "error": "ultralytics not installed"}
 
 
-# ── Main handler ──
+# ═══════════════════════════════════════════════════════════
+# Main handler
+# ═══════════════════════════════════════════════════════════
 
 async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
     """
     Process a chat message for setup intent.
-    Uses LLM for intent detection (with keyword fallback).
+    Priority: cache → local LLM → cloud LLM → keywords.
     Returns a response string if it's a setup message, None otherwise.
     """
-    # Try LLM-based intent detection first, fall back to keywords
     parsed = await _llm_detect_intent(message)
     if not parsed or parsed.get("intent") == "none":
         parsed = _keyword_detect_intent(message)
@@ -244,17 +413,15 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
     msg = message.lower()
 
     # ── Full setup wizard ──
-    if intent == "setup" or intent == "status":
+    if intent in ("setup", "status"):
         status_parts = []
 
-        # Check LLM
         llm_result = await test_llm(cfg.llm_url, cfg.llm_model, cfg.llm_api_key)
         if llm_result["ok"]:
             status_parts.append(f"✅ LLM connected: {cfg.llm_model} @ {cfg.llm_url}")
         else:
             status_parts.append(f"❌ LLM not connected: {llm_result['error']}\n   → Tell me your LLM API URL to configure it")
 
-        # Check camera
         if cfg.camera_snapshot_url:
             cam_result = await test_camera(cfg.camera_snapshot_url)
             if cam_result["ok"]:
@@ -264,7 +431,6 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
         else:
             status_parts.append("❌ Camera not configured\n   → Tell me your camera IP to auto-detect")
 
-        # Check PTZ
         if cfg.ptz_enabled:
             ptz_result = await test_ptz(cfg.ptz_url, cfg.ptz_user, cfg.ptz_pass)
             if ptz_result["ok"]:
@@ -274,7 +440,6 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
         else:
             status_parts.append("ℹ️ PTZ not enabled (optional)")
 
-        # Check YOLO
         yolo_result = await test_yolo()
         if yolo_result["ok"]:
             status_parts.append(f"✅ YOLO ready: ultralytics {yolo_result['version']}")
@@ -289,7 +454,6 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
     # ── Camera setup ──
     if intent == "camera":
         if ip:
-            # Test as Hikvision PTZ first
             ptz_result = await test_ptz(f"http://{ip}", cfg.ptz_user, cfg.ptz_pass)
             if ptz_result["ok"]:
                 cfg.camera_snapshot_url = f"http://{ip}/ISAPI/Streaming/channels/101/picture"
@@ -302,7 +466,6 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
                         f"   PTZ control enabled\n\n"
                         f"   You can now run patrol with 'vlm_active' strategy!")
 
-            # Try common snapshot paths
             for path in ["/snapshot", "/capture", "/ISAPI/Streaming/channels/101/picture",
                          "/cgi-bin/snapshot.cgi", "/jpg/image.jpg"]:
                 test_url = f"http://{ip}{path}"
@@ -327,7 +490,6 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
             else:
                 return f"❌ Camera URL not responding: {cam_result['error']}"
 
-        # General camera help
         if cfg.camera_snapshot_url:
             cam_result = await test_camera(cfg.camera_snapshot_url)
             status = "connected" if cam_result["ok"] else f"error: {cam_result['error']}"
@@ -359,7 +521,6 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
                         f"   Model: {use_model}\n\n"
                         f"   Make sure the LLM service is running and the model is available.")
 
-        # General LLM help
         result = await test_llm(cfg.llm_url, cfg.llm_model, cfg.llm_api_key)
         status = "connected" if result["ok"] else f"error: {result['error']}"
         return (f"🤖 Current LLM: {cfg.llm_model} @ {cfg.llm_url} ({status})\n\n"
@@ -415,7 +576,7 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
 
     # ── Patrol control ──
     if intent == "patrol":
-        if action in ("start",):
+        if action == "start":
             return "🔄 Use the Dashboard 'Run Patrol' button, or POST /api/patrol/start"
         if action == "vlm_active":
             cfg.patrol_strategy = "vlm_active"
