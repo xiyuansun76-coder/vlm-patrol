@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SmartAgri | Bio-Digital Synapse</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode:"class",
+    theme:{extend:{
+      colors:{
+        "background":"#121413","surface-container-low":"#1a1c1b",
+        "surface-container":"#1e201f","surface-container-high":"#282a29",
+        "surface-container-highest":"#333534","surface-container-lowest":"#0d0f0e",
+        "primary":"#efffe3","primary-fixed":"#79ff5b","primary-fixed-dim":"#2ae500",
+        "primary-container":"#39ff14","on-primary":"#053900","on-primary-container":"#107100",
+        "secondary":"#e6feff","secondary-fixed":"#63f7ff","secondary-fixed-dim":"#00dce5",
+        "secondary-container":"#00f4fe","on-secondary-container":"#006c71",
+        "on-surface":"#e2e3e0","on-surface-variant":"#baccb0",
+        "outline":"#85967c","outline-variant":"#3c4b35","error":"#ffb4ab"
+      },
+      borderRadius:{DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem"},
+      fontFamily:{headline:["Space Grotesk","sans-serif"],body:["Inter","sans-serif"],label:["Inter","sans-serif"]}
+    }}
+  }
+</script>
+<style>
+  .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}
+  .circuit-leaf-corner{position:absolute;top:0;right:0;width:40px;height:40px;border-top:1px solid rgba(57,255,20,.3);border-right:1px solid rgba(57,255,20,.3);border-radius:0 .75rem 0 100%;pointer-events:none}
+  @keyframes live-pulse{0%,100%{box-shadow:0 0 8px #39ff14,0 0 16px rgba(57,255,20,.3)}50%{box-shadow:0 0 3px #39ff14,0 0 6px rgba(57,255,20,.1)}}
+  .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#39ff14;box-shadow:0 0 8px #39ff14,0 0 16px rgba(57,255,20,.3);animation:live-pulse 2s ease-in-out infinite}
+  #camera-img{width:100%;height:100%;object-fit:cover;display:block}
+  #camera-img[src=""]{opacity:0}
+  .dot-on{background:#39ff14;box-shadow:0 0 5px rgba(57,255,20,.5)}
+  .dot-off{background:#333534}
+  /* Control btn states */
+  .ctrl-btn{transition:all .15s ease;-webkit-tap-highlight-color:transparent}
+  .ctrl-btn:active{transform:scale(.94)}
+  .ctrl-btn.on-light{background:rgba(121,255,91,.1)!important;border-color:rgba(121,255,91,.35)!important;color:#79ff5b!important;box-shadow:0 0 14px rgba(57,255,20,.2)}
+  .ctrl-btn.on-pump{background:rgba(0,244,254,.1)!important;border-color:rgba(0,244,254,.35)!important;color:#00f4fe!important;box-shadow:0 0 14px rgba(0,244,254,.2)}
+  .ctrl-btn.on-curtain{background:rgba(42,229,0,.1)!important;border-color:rgba(42,229,0,.35)!important;color:#2ae500!important;box-shadow:0 0 14px rgba(42,229,0,.2)}
+  .ctrl-btn.on-fan{background:rgba(0,220,229,.1)!important;border-color:rgba(0,220,229,.35)!important;color:#00dce5!important;box-shadow:0 0 14px rgba(0,220,229,.2)}
+  .fan-icon{display:inline-block}
+  .ctrl-btn.on-fan .fan-icon{animation:spin 1.5s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.ctrl-btn.on-fan .fan-icon{animation:none}}
+  .npk-n{background:linear-gradient(90deg,#a78bfa,#c4b5fd);box-shadow:0 0 6px rgba(167,139,250,.4)}
+  .npk-p{background:linear-gradient(90deg,#f472b6,#fb7cc6);box-shadow:0 0 6px rgba(244,114,182,.4)}
+  .npk-k{background:linear-gradient(90deg,#fb923c,#fda966);box-shadow:0 0 6px rgba(251,146,60,.4)}
+  main::-webkit-scrollbar{width:4px}
+  main::-webkit-scrollbar-track{background:transparent}
+  main::-webkit-scrollbar-thumb{background:#333534;border-radius:4px}
+  /* Chat bubbles */
+  .bubble-user{background:rgba(57,255,20,.08);border:1px solid rgba(57,255,20,.2);border-radius:.75rem .75rem 0 .75rem;align-self:flex-end;max-width:80%}
+  .bubble-ai{background:rgba(40,42,41,.6);border:1px solid rgba(0,244,254,.12);border-radius:.75rem .75rem .75rem 0;align-self:flex-start;max-width:85%}
+  .bubble-ai.thinking{opacity:.6}
+  .chat-input{background:rgba(13,15,14,.7);border:1px solid rgba(60,75,53,.3);color:#e2e3e0;border-radius:.5rem;padding:12px 16px;font-family:'Inter',sans-serif;font-size:13px;width:100%;outline:none;resize:none;transition:border-color .2s}
+  .chat-input:focus{border-color:rgba(0,244,254,.4)}
+  .chat-input::placeholder{color:#3c4b35}
+  #chat-messages{display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1;padding:16px}
+  #chat-messages::-webkit-scrollbar{width:3px}
+  #chat-messages::-webkit-scrollbar-thumb{background:#333534;border-radius:3px}
+  /* Markdown-ish in AI bubble */
+  .bubble-ai p{margin-bottom:.5em}
+  .bubble-ai p:last-child{margin-bottom:0}
+  .bubble-ai strong{color:#79ff5b}
+  .bubble-ai code{font-family:'SF Mono','Fira Code',monospace;background:rgba(0,0,0,.3);padding:.1em .3em;border-radius:.2rem;font-size:.85em}
+  /* View section hide/show */
+  .view-section{display:none}
+  .view-section.active{display:block}
+  /* Sidebar nav active state */
+  .nav-item.active{color:#4ade80;background:rgba(74,222,128,.1);border-right:3px solid #4ade80}
+  /* Camera grid */
+  .cam-thumb{aspect-ratio:16/9;overflow:hidden;border-radius:.5rem;background:#0d0f0e;cursor:pointer;border:1px solid rgba(60,75,53,.2);transition:border-color .2s}
+  .cam-thumb:hover{border-color:rgba(0,244,254,.3)}
+  .cam-thumb img{width:100%;height:100%;object-fit:cover}
+  /* PTZ buttons */
+  .ptz-btn{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:.5rem;background:rgba(40,42,41,.6);border:1px solid rgba(60,75,53,.25);color:#baccb0;transition:all .1s ease;-webkit-tap-highlight-color:transparent;cursor:pointer}
+  .ptz-btn:active,.ptz-btn:hover{background:rgba(0,244,254,.1);border-color:rgba(0,244,254,.3);color:#00f4fe}
+  .ptz-btn-center{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:rgba(40,42,41,.8);border:1px solid rgba(60,75,53,.3);color:#666;cursor:pointer;transition:all .1s}
+  .ptz-btn-center:hover{background:rgba(255,80,80,.1);border-color:rgba(255,80,80,.3);color:#ff5555}
+  /* Typing dots */
+  @keyframes typing{0%,80%,100%{transform:scale(0.8);opacity:.4}40%{transform:scale(1);opacity:1}}
+  .dot-typing span{display:inline-block;width:6px;height:6px;border-radius:50%;background:#00f4fe;animation:typing 1.2s infinite ease-in-out}
+  .dot-typing span:nth-child(1){animation-delay:0s}
+  .dot-typing span:nth-child(2){animation-delay:.2s}
+  .dot-typing span:nth-child(3){animation-delay:.4s}
+</style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container overflow-hidden h-screen flex flex-col">
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header class="backdrop-blur-xl w-full sticky top-0 bg-gradient-to-b from-neutral-900/90 to-transparent shadow-[0_8px_32px_rgba(0,0,0,0.45)] z-50 border-b border-outline-variant/10">
+  <div class="flex justify-between items-center w-full px-8 py-4">
+    <div class="flex items-center gap-10">
+      <div class="text-xl font-bold tracking-tighter text-lime-400 italic font-headline">SmartAgri</div>
+      <nav class="hidden md:flex gap-6 font-headline tracking-tight">
+        <button onclick="setView('overview')" class="nav-tab text-lime-400 border-b-2 border-lime-400 pb-1 text-sm">概览</button>
+        <button onclick="setView('soil')"     class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">土壤</button>
+        <button onclick="setView('atm')"      class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">大气</button>
+        <button onclick="setView('history')"  class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">历史</button>
+        <button onclick="setView('camera')"   class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">摄像头</button>
+        <button onclick="setView('livecam')"  class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">实时监控</button>
+        <button onclick="setView('patrol')"   class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">智能巡检</button>
+        <button onclick="setView('local')"    class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">本地服务</button>
+        <button onclick="setView('agent')"    class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">Agent</button>
+      </nav>
+    </div>
+    <div class="flex items-center gap-5">
+      <div class="flex items-center gap-2">
+        <span class="live-dot"></span>
+        <span class="font-headline text-[10px] tracking-[0.18em] uppercase text-lime-500 font-semibold">LIVE</span>
+      </div>
+      <span id="update-time" class="font-mono text-[11px] text-neutral-500 tracking-wider">--:--:--</span>
+      <form method="post" action="/logout" style="margin:0">
+        <button type="submit" class="text-neutral-600 hover:text-error transition-colors" title="退出登录">
+          <span class="material-symbols-outlined" style="font-size:20px">logout</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</header>
+
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- ── Sidebar ────────────────────────────────────────────── -->
+  <aside class="bg-neutral-900/40 backdrop-blur-2xl w-16 hover:w-52 transition-all duration-500 overflow-hidden sticky left-0 shadow-2xl flex flex-col py-6 group z-40 border-r border-outline-variant/10 shrink-0">
+    <div class="flex flex-col gap-4 px-3">
+      <div class="flex items-center gap-4 px-1 mb-2">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-container to-secondary-container flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined text-on-primary" style="font-size:18px">hub</span>
+        </div>
+        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div class="font-headline font-bold text-sm tracking-tight whitespace-nowrap">System Alpha</div>
+          <div class="text-[10px] text-primary-fixed uppercase tracking-widest whitespace-nowrap">温室监控</div>
+        </div>
+      </div>
+      <nav class="flex flex-col gap-1" id="sidebar-nav">
+        <button onclick="setView('overview')" data-view="overview" class="nav-item active flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">grid_view</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">概览</span>
+        </button>
+        <button onclick="setView('soil')" data-view="soil" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">grass</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">土壤</span>
+        </button>
+        <button onclick="setView('atm')" data-view="atm" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">air</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">大气</span>
+        </button>
+        <button onclick="setView('history')" data-view="history" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">history</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">历史</span>
+        </button>
+        <button onclick="setView('camera')" data-view="camera" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">photo_library</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">摄像头</span>
+        </button>
+        <button onclick="setView('livecam')" data-view="livecam" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">videocam</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">实时监控</span>
+        </button>
+        <button onclick="setView('patrol')" data-view="patrol" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">radar</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">巡检</span>
+        </button>
+        <button onclick="setView('local')" data-view="local" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">memory</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">本地服务</span>
+        </button>
+        <button onclick="setView('agent')" data-view="agent" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">smart_toy</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Agent</span>
+        </button>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- ── Main ───────────────────────────────────────────────── -->
+  <main class="flex-1 relative overflow-y-auto overflow-x-hidden p-6" id="main-scroll">
+
+    <!-- ════════════════════ VIEW: 概览 ════════════════════ -->
+    <div id="view-overview" class="view-section active space-y-6">
+
+      <!-- Section 1: Camera + Soil -->
+      <section class="grid grid-cols-12 gap-6">
+        <!-- Camera -->
+        <div class="col-span-8 relative rounded-full overflow-hidden shadow-2xl border border-outline-variant/20 bg-surface-container-lowest group" style="height:360px">
+          <div class="absolute inset-0">
+            <img id="camera-img" src="" alt="温室实时画面" class="w-full h-full object-cover opacity-90" onclick="openOverviewImg()" style="cursor:zoom-in">
+            <div class="absolute inset-0 bg-gradient-to-br from-neutral-900 to-surface-container-lowest -z-10 pointer-events-none"></div>
+            <div class="absolute inset-0 pointer-events-none opacity-10" style="background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(57,255,20,.03) 2px,rgba(57,255,20,.03) 4px)"></div>
+          </div>
+          <!-- prev/next buttons -->
+          <button onclick="overviewNav(-1)" id="ov-prev" class="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-white text-xl opacity-0 group-hover:opacity-100 transition-opacity" style="background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.2)">&#8249;</button>
+          <button onclick="overviewNav(1)"  id="ov-next" class="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-white text-xl opacity-0 group-hover:opacity-100 transition-opacity" style="background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.2)">&#8250;</button>
+          <div class="absolute top-5 left-5 p-4 bg-surface-container-lowest/80 backdrop-blur-md rounded-xl border border-primary-container/20 pointer-events-none">
+            <div class="font-headline text-[9px] tracking-[0.22em] text-primary-fixed uppercase mb-1">温室摄像头</div>
+            <div id="camera-time" class="font-mono text-sm font-bold tracking-tight text-on-surface">-- / --</div>
+          </div>
+          <div class="absolute top-5 right-5 flex items-center gap-2">
+            <div id="ov-index" class="font-mono text-[10px] text-neutral-500 bg-surface-container-lowest/70 px-2 py-1 rounded-lg hidden"></div>
+            <button onclick="capture()" class="flex items-center gap-2 bg-surface-container-lowest/80 backdrop-blur-md border border-secondary-container/30 rounded-xl px-4 py-2.5 text-secondary-container hover:bg-secondary-container/10 hover:border-secondary-container/60 transition-all">
+              <span class="material-symbols-outlined" style="font-size:16px">photo_camera</span>
+              <span class="font-headline text-[10px] font-bold uppercase tracking-widest">拍照</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Soil Health + CO₂ -->
+        <div class="col-span-4 flex flex-col gap-4">
+          <div class="relative bg-surface-container-high/40 backdrop-blur-2xl p-5 rounded-full border border-outline-variant/10 overflow-hidden flex-1 shadow-[0_20px_40px_rgba(0,0,0,.3)]">
+            <div class="circuit-leaf-corner"></div>
+            <div class="flex justify-between items-start mb-4">
+              <span class="material-symbols-outlined text-primary-container" style="font-size:26px;font-variation-settings:'FILL' 0,'wght' 300">science</span>
+              <div class="text-right">
+                <div class="font-headline text-[9px] tracking-widest text-neutral-400 uppercase">土壤状态</div>
+                <div class="text-primary-container font-headline font-bold italic text-xs">LIVE DATA</div>
+              </div>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <div class="flex justify-between items-end mb-1.5">
+                  <span class="text-neutral-400 font-label text-[10px] uppercase tracking-widest">土壤温度</span>
+                  <span class="font-headline text-xl font-bold text-primary-fixed"><span id="v-temperature" aria-live="polite">--</span><span class="text-xs font-normal text-neutral-500 ml-1">°C</span></span>
+                </div>
+                <div class="w-full h-1 bg-surface-container-lowest rounded-full overflow-hidden">
+                  <div id="bar-temperature" class="h-full rounded-full transition-all duration-500" style="background:#79ff5b;box-shadow:0 0 6px rgba(121,255,91,.4);width:0%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between items-end mb-1.5">
+                  <span class="text-neutral-400 font-label text-[10px] uppercase tracking-widest">土壤湿度</span>
+                  <span class="font-headline text-xl font-bold text-secondary-fixed"><span id="v-moisture" aria-live="polite">--</span><span class="text-xs font-normal text-neutral-500 ml-1">%</span></span>
+                </div>
+                <div class="w-full h-1 bg-surface-container-lowest rounded-full overflow-hidden">
+                  <div id="bar-moisture" class="h-full rounded-full transition-all duration-500" style="background:#00f4fe;box-shadow:0 0 6px rgba(0,244,254,.4);width:0%"></div>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-outline-variant/10">
+                <div class="font-headline text-[9px] tracking-[0.22em] text-neutral-500 uppercase mb-3">肥力 NPK</div>
+                <div class="flex items-center gap-3 mb-2.5">
+                  <span class="text-[9px] font-headline font-bold uppercase text-neutral-500 w-3 shrink-0">N</span>
+                  <div class="flex-1 h-1 bg-surface-container-lowest rounded-full overflow-hidden"><div id="bar-nitrogen" class="h-full rounded-full npk-n transition-all duration-500" style="width:0%"></div></div>
+                  <span id="v-nitrogen" class="font-mono text-[11px] font-bold w-12 text-right shrink-0 tabular-nums" style="color:#a78bfa" aria-live="polite">--</span>
+                </div>
+                <div class="flex items-center gap-3 mb-2.5">
+                  <span class="text-[9px] font-headline font-bold uppercase text-neutral-500 w-3 shrink-0">P</span>
+                  <div class="flex-1 h-1 bg-surface-container-lowest rounded-full overflow-hidden"><div id="bar-phosphorus" class="h-full rounded-full npk-p transition-all duration-500" style="width:0%"></div></div>
+                  <span id="v-phosphorus" class="font-mono text-[11px] font-bold w-12 text-right shrink-0 tabular-nums" style="color:#f472b6" aria-live="polite">--</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-[9px] font-headline font-bold uppercase text-neutral-500 w-3 shrink-0">K</span>
+                  <div class="flex-1 h-1 bg-surface-container-lowest rounded-full overflow-hidden"><div id="bar-potassium" class="h-full rounded-full npk-k transition-all duration-500" style="width:0%"></div></div>
+                  <span id="v-potassium" class="font-mono text-[11px] font-bold w-12 text-right shrink-0 tabular-nums" style="color:#fb923c" aria-live="polite">--</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- CO₂ mini -->
+          <div class="bg-surface-container-high/40 backdrop-blur-md p-5 rounded-full border border-outline-variant/10 flex items-center gap-4 hover:bg-surface-container-high/60 transition-all">
+            <div class="w-11 h-11 rounded-full bg-primary-container/10 flex items-center justify-center shrink-0">
+              <span class="material-symbols-outlined text-primary-container" style="font-size:22px">co2</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-0.5">CO₂ 浓度</div>
+              <div class="font-headline text-2xl font-bold tabular-nums" style="color:#39ff14;text-shadow:0 0 18px rgba(57,255,20,.35)">
+                <span id="v-co2" aria-live="polite">--</span><span class="text-sm font-normal text-neutral-500 ml-1">ppm</span>
+              </div>
+            </div>
+            <span class="material-symbols-outlined text-neutral-600 shrink-0">trending_flat</span>
+          </div>
+          <!-- 空气温湿度 mini -->
+          <div class="bg-surface-container-high/40 backdrop-blur-md p-5 rounded-full border border-outline-variant/10 flex items-center gap-4 hover:bg-surface-container-high/60 transition-all">
+            <div class="w-11 h-11 rounded-full bg-tertiary-container/10 flex items-center justify-center shrink-0">
+              <span class="material-symbols-outlined text-tertiary-container" style="font-size:22px">air</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-0.5">空气环境</div>
+              <div class="flex items-baseline gap-3">
+                <div>
+                  <span class="font-headline text-xl font-bold tabular-nums" style="color:#f87171"><span id="v-air_temperature" aria-live="polite">--</span></span><span class="text-xs text-neutral-500 ml-0.5">°C</span>
+                </div>
+                <div>
+                  <span class="font-headline text-xl font-bold tabular-nums" style="color:#60a5fa"><span id="v-air_humidity" aria-live="polite">--</span></span><span class="text-xs text-neutral-500 ml-0.5">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Plant Score + Device Controls -->
+      <section class="grid grid-cols-3 gap-6">
+        <div class="bg-surface-container-high/40 backdrop-blur-xl p-6 rounded-full border border-outline-variant/10 flex flex-col h-64 relative overflow-hidden">
+          <div class="font-headline text-[9px] tracking-[0.3em] text-neutral-400 uppercase mb-1">植物评分</div>
+          <div class="flex-1 flex items-center justify-center relative">
+            <svg width="140" height="140" viewBox="0 0 140 140" style="position:absolute">
+              <circle cx="70" cy="70" r="56" fill="none" stroke="rgba(60,75,53,0.25)" stroke-width="9"/>
+              <circle id="plant-score-arc" cx="70" cy="70" r="56" fill="none" stroke="#39ff14" stroke-width="9"
+                stroke-linecap="round" stroke-dasharray="0 352" transform="rotate(-90 70 70)"
+                style="transition:stroke-dasharray .8s ease,stroke .5s ease"/>
+            </svg>
+            <div class="text-center z-10">
+              <div id="plant-score-num" class="font-headline font-bold tabular-nums" style="font-size:2.8rem;line-height:1;color:#39ff14;text-shadow:0 0 20px rgba(57,255,20,.3)">--</div>
+              <div id="plant-score-label" class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mt-1">等待数据</div>
+            </div>
+          </div>
+          <div id="plant-score-tips" class="font-mono text-[10px] text-neutral-500 text-center truncate"></div>
+        </div>
+        <div class="col-span-2 bg-surface-container-high/40 backdrop-blur-xl p-6 rounded-full border border-outline-variant/10 flex flex-col h-64">
+          <div class="flex justify-between items-center mb-5">
+            <div>
+              <div class="font-headline text-[9px] tracking-[0.3em] text-neutral-400 uppercase">设备网络</div>
+              <h3 class="font-headline text-xl font-bold tracking-tight">控制面板</h3>
+            </div>
+            <span class="material-symbols-outlined text-secondary-container animate-pulse" style="font-variation-settings:'FILL' 1;font-size:24px">sensors</span>
+          </div>
+          <div class="flex-1 grid grid-cols-4 gap-3">
+            <button id="btn-light" class="ctrl-btn flex flex-col items-center justify-center gap-2.5 bg-surface-container-lowest/60 backdrop-blur-md rounded-xl border border-outline-variant/10 p-3 text-neutral-500 hover:text-on-surface hover:bg-surface-container-high/50 cursor-pointer" onclick="toggle('light',this)" aria-pressed="false" aria-label="灯光">
+              <span class="material-symbols-outlined" style="font-size:26px">light_mode</span>
+              <span class="font-headline text-[10px] uppercase tracking-widest">灯光</span>
+            </button>
+            <button id="btn-pump" class="ctrl-btn flex flex-col items-center justify-center gap-2.5 bg-surface-container-lowest/60 backdrop-blur-md rounded-xl border border-outline-variant/10 p-3 text-neutral-500 hover:text-on-surface hover:bg-surface-container-high/50 cursor-pointer" onclick="toggle('pump',this)" aria-pressed="false" aria-label="水泵">
+              <span class="material-symbols-outlined" style="font-size:26px">water_drop</span>
+              <span class="font-headline text-[10px] uppercase tracking-widest">水泵</span>
+            </button>
+            <button id="btn-curtain" class="ctrl-btn flex flex-col items-center justify-center gap-2.5 bg-surface-container-lowest/60 backdrop-blur-md rounded-xl border border-outline-variant/10 p-3 text-neutral-500 hover:text-on-surface hover:bg-surface-container-high/50 cursor-pointer" onclick="toggle('curtain',this)" aria-pressed="false" aria-label="水管">
+              <span class="material-symbols-outlined" style="font-size:26px">plumbing</span>
+              <span class="font-headline text-[10px] uppercase tracking-widest">水管</span>
+            </button>
+            <button id="btn-fan" class="ctrl-btn flex flex-col items-center justify-center gap-2.5 bg-surface-container-lowest/60 backdrop-blur-md rounded-xl border border-outline-variant/10 p-3 text-neutral-500 hover:text-on-surface hover:bg-surface-container-high/50 cursor-pointer" onclick="toggle('fan',this)" aria-pressed="false" aria-label="风扇">
+              <span class="material-symbols-outlined fan-icon" style="font-size:26px">mode_fan</span>
+              <span class="font-headline text-[10px] uppercase tracking-widest">风扇</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div><!-- /view-overview -->
+
+    <!-- ════════════════════ VIEW: 土壤 ════════════════════ -->
+    <div id="view-soil" class="view-section space-y-6">
+      <div class="font-headline text-[10px] tracking-[0.3em] text-neutral-500 uppercase mb-2">土壤监测</div>
+      <div class="grid grid-cols-2 gap-6">
+        <div class="bg-surface-container-high/40 backdrop-blur-xl p-6 rounded-full border border-outline-variant/10 relative overflow-hidden">
+          <div class="circuit-leaf-corner"></div>
+          <div class="font-headline text-[9px] tracking-[0.3em] text-neutral-400 uppercase mb-4">土壤温度 & 湿度趋势</div>
+          <div style="position:relative;height:260px"><canvas id="soilChart" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>
+        </div>
+        <div class="bg-surface-container-high/40 backdrop-blur-xl p-6 rounded-full border border-outline-variant/10 relative overflow-hidden">
+          <div class="circuit-leaf-corner"></div>
+          <div class="font-headline text-[9px] tracking-[0.3em] text-neutral-400 uppercase mb-4">土壤肥力趋势（N / P / K）</div>
+          <div style="position:relative;height:260px"><canvas id="nkpChart" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>
+        </div>
+      </div>
+      <!-- Soil current values row -->
+      <div class="grid grid-cols-5 gap-4">
+        <div class="bg-surface-container-low p-5 rounded-full border border-outline-variant/5 text-center">
+          <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-2">土壤温度</div>
+          <div class="font-headline text-3xl font-bold text-primary-fixed tabular-nums" id="soil-v-temp">--</div>
+          <div class="font-mono text-[10px] text-neutral-600 mt-1">°C</div>
+        </div>
+        <div class="bg-surface-container-low p-5 rounded-full border border-outline-variant/5 text-center">
+          <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-2">土壤湿度</div>
+          <div class="font-headline text-3xl font-bold text-secondary-fixed tabular-nums" id="soil-v-moist">--</div>
+          <div class="font-mono text-[10px] text-neutral-600 mt-1">%</div>
+        </div>
+        <div class="bg-surface-container-low p-5 rounded-full border border-outline-variant/5 text-center">
+          <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-2">氮 N</div>
+          <div class="font-headline text-3xl font-bold tabular-nums" style="color:#a78bfa" id="soil-v-n">--</div>
+          <div class="font-mono text-[10px] text-neutral-600 mt-1">mg/kg</div>
+        </div>
+        <div class="bg-surface-container-low p-5 rounded-full border border-outline-variant/5 text-center">
+          <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-2">磷 P</div>
+          <div class="font-headline text-3xl font-bold tabular-nums" style="color:#f472b6" id="soil-v-p">--</div>
+          <div class="font-mono text-[10px] text-neutral-600 mt-1">mg/kg</div>
+        </div>
+        <div class="bg-surface-container-low p-5 rounded-full border border-outline-variant/5 text-center">
+          <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-2">钾 K</div>
+          <div class="font-headline text-3xl font-bold tabular-nums" style="color:#fb923c" id="soil-v-k">--</div>
+          <div class="font-mono text-[10px] text-neutral-600 mt-1">mg/kg</div>
+        </div>
+      </div>
+    </div><!-- /view-soil -->
+
+    <!-- ════════════════════ VIEW: 大气 ════════════════════ -->
+    <div id="view-atm" class="view-section space-y-6">
+      <div class="font-headline text-[10px] tracking-[0.3em] text-neutral-500 uppercase mb-2">大气监测</div>
+      <div class="bg-surface-container-high/40 backdrop-blur-xl p-8 rounded-full border border-outline-variant/10 relative overflow-hidden">
+        <div class="circuit-leaf-corner"></div>
+        <div class="flex items-end gap-6 mb-6 flex-wrap">
+          <div>
+            <div class="font-headline text-[9px] tracking-[0.3em] text-neutral-400 uppercase mb-1">当前 CO₂ 浓度</div>
+            <div class="font-headline font-bold tabular-nums" style="font-size:4rem;line-height:1;color:#39ff14;text-shadow:0 0 30px rgba(57,255,20,.4)" id="atm-v-co2">--</div>
+          </div>
+          <div class="pb-3">
+            <div class="font-headline text-lg font-normal text-neutral-500">ppm</div>
+          </div>
+          <!-- 空气温湿度 -->
+          <div class="flex gap-5 pb-2 ml-4">
+            <div class="text-center">
+              <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-1">空气温度</div>
+              <div class="font-headline text-3xl font-bold tabular-nums" style="color:#f87171"><span id="atm-v-air-temp">--</span></div>
+              <div class="font-mono text-[10px] text-neutral-600 mt-1">°C</div>
+            </div>
+            <div class="text-center">
+              <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-1">空气湿度</div>
+              <div class="font-headline text-3xl font-bold tabular-nums" style="color:#60a5fa"><span id="atm-v-air-hum">--</span></div>
+              <div class="font-mono text-[10px] text-neutral-600 mt-1">%</div>
+            </div>
+          </div>
+          <div class="pb-2 ml-4">
+            <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-1">参考范围</div>
+            <div class="font-mono text-xs text-neutral-400">正常：400 – 1500 ppm</div>
+            <div class="font-mono text-xs text-neutral-400">偏高：1500 – 2000 ppm</div>
+            <div class="font-mono text-xs" style="color:#ffb4ab">危险：&gt; 2000 ppm</div>
+          </div>
+        </div>
+        <!-- CO₂ 趋势 -->
+        <div class="mb-2">
+          <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-2">CO₂ 趋势</div>
+          <div style="position:relative;height:200px">
+            <canvas id="envChartBig" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+          </div>
+        </div>
+        <!-- 空气温湿度趋势 -->
+        <div class="mt-4">
+          <div class="font-headline text-[9px] tracking-widest text-neutral-500 uppercase mb-2">空气温湿度趋势</div>
+          <div style="position:relative;height:200px">
+            <canvas id="airEnvChart" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+          </div>
+        </div>
+      </div>
+    </div><!-- /view-atm -->
+
+    <!-- ════════════════════ VIEW: 历史 ════════════════════ -->
+    <div id="view-history" class="view-section space-y-6">
+      <div class="flex justify-between items-center">
+        <div class="font-headline text-[10px] tracking-[0.3em] text-neutral-500 uppercase">控制日志</div>
+        <button onclick="loadHistoryLogs()" class="text-primary-fixed-dim text-[10px] uppercase tracking-widest font-headline hover:underline">刷新</button>
+      </div>
+      <div class="bg-surface-container-low rounded-full border border-outline-variant/5 overflow-hidden">
+        <div class="grid grid-cols-5 px-6 py-3 border-b border-outline-variant/10">
+          <span class="font-headline text-[9px] tracking-widest text-neutral-600 uppercase">时间</span>
+          <span class="font-headline text-[9px] tracking-widest text-neutral-600 uppercase">设备</span>
+          <span class="font-headline text-[9px] tracking-widest text-neutral-600 uppercase">状态</span>
+          <span class="font-headline text-[9px] tracking-widest text-neutral-600 uppercase">持续(s)</span>
+          <span class="font-headline text-[9px] tracking-widest text-neutral-600 uppercase">来源</span>
+        </div>
+        <div id="history-logs-list" class="divide-y divide-outline-variant/5"></div>
+      </div>
+    </div><!-- /view-history -->
+
+    <!-- ════════════════════ VIEW: 摄像头 ════════════════════ -->
+    <div id="view-camera" class="view-section space-y-6">
+      <div class="flex justify-between items-center">
+        <div class="font-headline text-[10px] tracking-[0.3em] text-neutral-500 uppercase">最新照片（最多6张）</div>
+        <button onclick="capture().then(()=>setTimeout(loadCameraGallery,14000))" class="flex items-center gap-2 bg-surface-container-high/40 border border-secondary-container/30 rounded-xl px-4 py-2 text-secondary-container hover:bg-secondary-container/10 transition-all">
+          <span class="material-symbols-outlined" style="font-size:16px">photo_camera</span>
+          <span class="font-headline text-[10px] font-bold uppercase tracking-widest">拍照</span>
+        </button>
+      </div>
+      <div id="camera-gallery" class="grid grid-cols-3 gap-4"></div>
+    </div><!-- /view-camera -->
+
+    <!-- ════════════════════ VIEW: 实时监控 ════════════════════ -->
+    <div id="view-livecam" class="view-section space-y-4">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+            <span class="material-symbols-outlined text-cyan-400" style="font-size:16px;font-variation-settings:'FILL' 1">videocam</span>
+          </div>
+          <div>
+            <div class="font-headline font-bold text-sm tracking-tight">实时监控</div>
+            <div class="text-[10px] text-neutral-500 font-mono">HIK PTZ Camera</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="hik-status-dot" class="inline-block w-2 h-2 rounded-full bg-neutral-600"></span>
+          <span id="hik-status-text" class="text-[10px] text-neutral-500 font-mono">未连接</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- ── Video area ── -->
+        <div class="lg:col-span-2">
+          <div class="relative rounded-xl overflow-hidden bg-black border border-outline-variant/10" style="aspect-ratio:16/9">
+            <video id="hik-video" autoplay muted playsinline
+              style="width:100%;height:100%;object-fit:cover;display:block"></video>
+            <img id="hik-img" src="" alt="实时画面"
+              style="width:100%;height:100%;object-fit:cover;display:none"
+              onerror="hikImgError()">
+            <div id="hik-overlay" class="absolute inset-0 flex flex-col items-center justify-center gap-2"
+              style="background:rgba(0,0,0,.6)">
+              <span class="material-symbols-outlined text-neutral-500" style="font-size:36px">videocam_off</span>
+              <span class="text-neutral-500 text-xs">正在连接摄像头…</span>
+            </div>
+            <!-- Live badge -->
+            <div class="absolute top-3 left-3 flex items-center gap-2 px-2 py-1 rounded-full"
+              style="background:rgba(0,0,0,.55)">
+              <span id="hik-live-dot" class="inline-block w-2 h-2 rounded-full bg-neutral-600"></span>
+              <span class="font-mono text-[10px] text-neutral-400 uppercase tracking-widest">LIVE</span>
+            </div>
+          </div>
+          <!-- Snapshot timestamp -->
+          <div class="mt-2 text-[10px] text-neutral-600 font-mono text-right" id="hik-snap-time">--</div>
+        </div>
+
+        <!-- ── PTZ Controls ── -->
+        <div class="flex flex-col gap-4">
+          <!-- Direction pad -->
+          <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+            <div class="text-[10px] font-headline uppercase tracking-widest text-neutral-500 mb-3">方向控制</div>
+            <div class="flex flex-col items-center gap-2">
+              <!-- Up -->
+              <button class="ptz-btn" onmousedown="hikPTZ(0,40,0)" onmouseup="hikStop()" ontouchstart="hikPTZ(0,40,0)" ontouchend="hikStop()">
+                <span class="material-symbols-outlined" style="font-size:20px">arrow_upward</span>
+              </button>
+              <div class="flex items-center gap-2">
+                <!-- Left -->
+                <button class="ptz-btn" onmousedown="hikPTZ(-40,0,0)" onmouseup="hikStop()" ontouchstart="hikPTZ(-40,0,0)" ontouchend="hikStop()">
+                  <span class="material-symbols-outlined" style="font-size:20px">arrow_back</span>
+                </button>
+                <!-- Stop -->
+                <button onclick="hikStop()" class="ptz-btn-center" title="停止">
+                  <span class="material-symbols-outlined" style="font-size:16px">stop</span>
+                </button>
+                <!-- Right -->
+                <button class="ptz-btn" onmousedown="hikPTZ(40,0,0)" onmouseup="hikStop()" ontouchstart="hikPTZ(40,0,0)" ontouchend="hikStop()">
+                  <span class="material-symbols-outlined" style="font-size:20px">arrow_forward</span>
+                </button>
+              </div>
+              <!-- Down -->
+              <button class="ptz-btn" onmousedown="hikPTZ(0,-40,0)" onmouseup="hikStop()" ontouchstart="hikPTZ(0,-40,0)" ontouchend="hikStop()">
+                <span class="material-symbols-outlined" style="font-size:20px">arrow_downward</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Zoom -->
+          <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+            <div class="text-[10px] font-headline uppercase tracking-widest text-neutral-500 mb-3">变焦</div>
+            <div class="flex gap-2">
+              <button class="ptz-btn flex-1" onmousedown="hikPTZ(0,0,-40)" onmouseup="hikStop()" ontouchstart="hikPTZ(0,0,-40)" ontouchend="hikStop()">
+                <span class="material-symbols-outlined" style="font-size:20px">zoom_out</span>
+              </button>
+              <button class="ptz-btn flex-1" onmousedown="hikPTZ(0,0,40)" onmouseup="hikStop()" ontouchstart="hikPTZ(0,0,40)" ontouchend="hikStop()">
+                <span class="material-symbols-outlined" style="font-size:20px">zoom_in</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Snapshot button -->
+          <button onclick="hikSnap()" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10 transition-all font-headline text-xs uppercase tracking-widest">
+            <span class="material-symbols-outlined" style="font-size:16px">photo_camera</span>
+            抓取快照
+          </button>
+
+          <!-- Health Diagnosis button -->
+          <button onclick="runDiagnosis()" id="diag-btn" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-lime-500/20 bg-lime-500/5 text-lime-400 hover:bg-lime-500/10 transition-all font-headline text-xs uppercase tracking-widest">
+            <span class="material-symbols-outlined" style="font-size:16px">health_and_safety</span>
+            <span id="diag-btn-text">健康诊断</span>
+          </button>
+
+          <!-- Device info -->
+          <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-3 space-y-1.5">
+            <div class="flex justify-between text-[10px]">
+              <span class="text-neutral-600">型号</span>
+              <span class="text-neutral-400 font-mono">DS-2DC6223IW-A</span>
+            </div>
+            <div class="flex justify-between text-[10px]">
+              <span class="text-neutral-600">IP</span>
+              <span class="text-neutral-400 font-mono">Camera IP</span>
+            </div>
+            <div class="flex justify-between text-[10px]">
+              <span class="text-neutral-600">码流</span>
+              <span class="text-neutral-400 font-mono">1280×720 H.264</span>
+            </div>
+          </div>
+        </div>
+      <!-- ── Diagnosis Results Panel ── -->
+      <div id="diag-panel" class="hidden mt-4">
+        <div class="bg-surface-container-high/20 border border-lime-500/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-lime-400" style="font-size:16px;font-variation-settings:'FILL' 1">health_and_safety</span>
+            <span class="font-headline font-bold text-sm tracking-tight text-lime-400">诊断结果</span>
+            <span id="diag-time" class="ml-auto text-[10px] text-neutral-600 font-mono"></span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Vision-Only -->
+            <div class="bg-surface-container/60 rounded-xl p-3 border border-outline-variant/10">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="material-symbols-outlined text-cyan-400" style="font-size:14px">visibility</span>
+                <span class="text-[10px] font-headline uppercase tracking-widest text-cyan-400">Vision-Only</span>
+              </div>
+              <div id="diag-vision" class="space-y-1.5">
+                <div class="text-neutral-600 text-xs">等待诊断...</div>
+              </div>
+            </div>
+            <!-- Multi-Modal -->
+            <div class="bg-surface-container/60 rounded-xl p-3 border border-lime-500/10">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="material-symbols-outlined text-lime-400" style="font-size:14px">sensors</span>
+                <span class="text-[10px] font-headline uppercase tracking-widest text-lime-400">Multi-Modal</span>
+                <span class="text-[9px] text-neutral-600">(视觉+传感器)</span>
+              </div>
+              <div id="diag-multi" class="space-y-1.5">
+                <div class="text-neutral-600 text-xs">等待诊断...</div>
+              </div>
+            </div>
+          </div>
+          <!-- Sensor data used -->
+          <div id="diag-sensor-info" class="mt-3 text-[10px] text-neutral-600 font-mono hidden"></div>
+        </div>
+      </div>
+
+      </div>
+    </div><!-- /view-livecam -->
+
+    <!-- ════════════════════ VIEW: 智能巡检 ════════════════════ -->
+    <div id="view-patrol" class="view-section space-y-4">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-lime-500/10 border border-lime-500/20 flex items-center justify-center">
+            <span class="material-symbols-outlined text-lime-400" style="font-size:16px;font-variation-settings:'FILL' 1">radar</span>
+          </div>
+          <div>
+            <div class="font-headline font-bold text-sm tracking-tight">智能巡检系统</div>
+            <div class="text-[10px] text-neutral-500 font-mono">VLM 分析全景 → PTZ逐株聚焦 → 近景确认 → 健康诊断</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <select id="patrol-strategy" class="bg-surface-container-high/40 border border-outline-variant/20 rounded-lg px-3 py-2 text-xs font-mono text-on-surface">
+          <option value="vlm_active">VLM 智能巡检</option>
+          <option value="fixed_route">固定路线巡检</option>
+          <option value="random">随机采样巡检</option>
+        </select>
+        <button onclick="patrolStart()" id="patrol-btn-start" class="flex items-center gap-2 px-4 py-2 rounded-lg border border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 transition-all font-headline text-xs uppercase tracking-widest">
+          <span class="material-symbols-outlined" style="font-size:16px">play_arrow</span>
+          开始巡检
+        </button>
+        <button onclick="patrolStop()" id="patrol-btn-stop" disabled class="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all font-headline text-xs uppercase tracking-widest opacity-40">
+          <span class="material-symbols-outlined" style="font-size:16px">stop</span>
+          停止
+        </button>
+        <button onclick="patrolDiagnose()" id="patrol-btn-diag" class="flex items-center gap-2 px-4 py-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all font-headline text-xs uppercase tracking-widest ml-auto">
+          <span class="material-symbols-outlined" style="font-size:16px">health_and_safety</span>
+          当前画面诊断
+        </button>
+      </div>
+
+      <!-- Status bar -->
+      <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+        <div id="patrol-step" class="text-lime-400 font-headline text-sm font-bold mb-2">就绪</div>
+        <div class="flex gap-3 flex-wrap">
+          <div class="bg-surface-container/60 rounded-lg px-4 py-2 text-center min-w-[80px]">
+            <div id="patrol-n-found" class="text-xl font-bold text-lime-400">0</div>
+            <div class="text-[10px] text-neutral-600 font-headline uppercase">发现</div>
+          </div>
+          <div class="bg-surface-container/60 rounded-lg px-4 py-2 text-center min-w-[80px]">
+            <div id="patrol-n-confirmed" class="text-xl font-bold text-cyan-400">0</div>
+            <div class="text-[10px] text-neutral-600 font-headline uppercase">确认</div>
+          </div>
+          <div class="bg-surface-container/60 rounded-lg px-4 py-2 text-center min-w-[80px]">
+            <div id="patrol-n-rejected" class="text-xl font-bold text-red-400">0</div>
+            <div class="text-[10px] text-neutral-600 font-headline uppercase">排除</div>
+          </div>
+          <div class="bg-surface-container/60 rounded-lg px-4 py-2 text-center min-w-[80px]">
+            <div id="patrol-n-dataset" class="text-xl font-bold text-yellow-400">0</div>
+            <div class="text-[10px] text-neutral-600 font-headline uppercase">数据集</div>
+          </div>
+          <div class="bg-surface-container/60 rounded-lg px-4 py-2 text-center min-w-[80px]">
+            <div id="patrol-ptz-travel" class="text-xl font-bold text-neutral-400">0°</div>
+            <div class="text-[10px] text-neutral-600 font-headline uppercase">PTZ移动</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diagnosis result (inline) -->
+      <div id="patrol-diag-panel" class="hidden">
+        <div class="bg-surface-container-high/20 border border-cyan-500/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-cyan-400" style="font-size:16px;font-variation-settings:'FILL' 1">health_and_safety</span>
+            <span class="font-headline font-bold text-sm tracking-tight text-cyan-400">实时诊断</span>
+            <span id="patrol-diag-time" class="ml-auto text-[10px] text-neutral-600 font-mono"></span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-surface-container/60 rounded-xl p-3 border border-outline-variant/10">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="material-symbols-outlined text-cyan-400" style="font-size:14px">visibility</span>
+                <span class="text-[10px] font-headline uppercase tracking-widest text-cyan-400">Vision-Only</span>
+              </div>
+              <div id="patrol-diag-vision" class="space-y-1.5"><div class="text-neutral-600 text-xs">--</div></div>
+            </div>
+            <div class="bg-surface-container/60 rounded-xl p-3 border border-lime-500/10">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="material-symbols-outlined text-lime-400" style="font-size:14px">sensors</span>
+                <span class="text-[10px] font-headline uppercase tracking-widest text-lime-400">Multi-Modal</span>
+              </div>
+              <div id="patrol-diag-multi" class="space-y-1.5"><div class="text-neutral-600 text-xs">--</div></div>
+            </div>
+          </div>
+          <div id="patrol-diag-sensor" class="mt-2 text-[10px] text-neutral-600 font-mono hidden"></div>
+        </div>
+      </div>
+
+      <!-- Plant cards -->
+      <div id="patrol-plants" class="space-y-3"></div>
+
+      <!-- History -->
+      <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="material-symbols-outlined text-neutral-500" style="font-size:16px">history</span>
+          <span class="font-headline font-bold text-sm tracking-tight text-neutral-400">巡检历史</span>
+          <button onclick="loadPatrolHistory()" class="ml-auto text-[10px] text-cyan-400 hover:text-cyan-300 font-headline uppercase tracking-widest">刷新</button>
+        </div>
+        <div id="patrol-history" class="space-y-2">
+          <div class="text-neutral-600 text-xs">点击刷新加载历史记录</div>
+        </div>
+      </div>
+    </div><!-- /view-patrol -->
+
+
+    <!-- ════════════════════ VIEW: 本地服务 ════════════════════ -->
+    <div id="view-local" class="view-section space-y-5">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+            <span class="material-symbols-outlined text-purple-400" style="font-size:16px;font-variation-settings:'FILL' 1">memory</span>
+          </div>
+          <div>
+            <div class="font-headline font-bold text-sm tracking-tight">VLM-Patrol 本地服务</div>
+            <div class="text-[10px] text-neutral-500 font-mono">本地 VLM 检测 → YOLO 知识蒸馏 → 自动分析 → 照料执行</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="vlp-conn-dot" class="w-2 h-2 rounded-full bg-neutral-600"></span>
+          <span id="vlp-conn-text" class="text-[10px] text-neutral-600 font-mono">检查中...</span>
+        </div>
+      </div>
+
+      <!-- Status Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4 text-center">
+          <div id="vlp-health" class="text-2xl font-bold text-lime-400">--</div>
+          <div class="text-[10px] text-neutral-600 font-headline uppercase mt-1">健康评分</div>
+        </div>
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4 text-center">
+          <div id="vlp-plants" class="text-2xl font-bold text-cyan-400">--</div>
+          <div class="text-[10px] text-neutral-600 font-headline uppercase mt-1">检测植物</div>
+        </div>
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4 text-center">
+          <div id="vlp-dataset" class="text-2xl font-bold text-yellow-400">--</div>
+          <div class="text-[10px] text-neutral-600 font-headline uppercase mt-1">数据集</div>
+        </div>
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4 text-center">
+          <div id="vlp-yolo" class="text-2xl font-bold text-purple-400">--</div>
+          <div class="text-[10px] text-neutral-600 font-headline uppercase mt-1">YOLO 模型</div>
+        </div>
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4 text-center">
+          <div id="vlp-strategy" class="text-2xl font-bold text-neutral-400">--</div>
+          <div class="text-[10px] text-neutral-600 font-headline uppercase mt-1">巡检策略</div>
+        </div>
+      </div>
+
+      <!-- Main content: Camera + Chat side by side -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Left: Camera snapshot + controls -->
+        <div class="space-y-3">
+          <div class="relative bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant/10" style="aspect-ratio:16/9">
+            <img id="vlp-cam-img" src="" class="w-full h-full object-cover" style="display:none">
+            <div id="vlp-cam-placeholder" class="absolute inset-0 flex items-center justify-center text-neutral-600 text-xs font-mono">点击抓图查看</div>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <button onclick="vlpSnapshot()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all text-xs font-headline uppercase tracking-widest">
+              <span class="material-symbols-outlined" style="font-size:14px">photo_camera</span> 抓图
+            </button>
+            <button onclick="vlpDetect()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 transition-all text-xs font-headline uppercase tracking-widest">
+              <span class="material-symbols-outlined" style="font-size:14px">search</span> VLM 检测
+            </button>
+            <button onclick="vlpAnalyze()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all text-xs font-headline uppercase tracking-widest">
+              <span class="material-symbols-outlined" style="font-size:14px">psychology</span> 分析诊断
+            </button>
+            <button onclick="vlpTrain()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-all text-xs font-headline uppercase tracking-widest ml-auto">
+              <span class="material-symbols-outlined" style="font-size:14px">model_training</span> 训练 YOLO
+            </button>
+          </div>
+          <!-- Detection results -->
+          <div id="vlp-detect-result" class="hidden bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-3">
+            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">检测结果</div>
+            <div id="vlp-detect-content" class="text-xs text-neutral-300 font-mono whitespace-pre-wrap"></div>
+          </div>
+        </div>
+
+        <!-- Right: Setup Assistant Chat -->
+        <div class="flex flex-col bg-surface-container-high/10 border border-outline-variant/10 rounded-xl overflow-hidden" style="height:480px">
+          <div class="flex items-center gap-2 px-4 py-3 border-b border-outline-variant/10">
+            <span class="material-symbols-outlined text-purple-400" style="font-size:16px">terminal</span>
+            <span class="font-headline font-bold text-xs tracking-tight">配置助手</span>
+            <span class="text-[10px] text-neutral-600 font-mono ml-auto">自然语言配置摄像头 / LLM / YOLO</span>
+          </div>
+          <div id="vlp-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3" style="display:flex;flex-direction:column;gap:10px">
+            <div class="bubble-ai px-3 py-2 text-xs">
+              <p>👋 我是配置助手，可以帮你配置：</p>
+              <p>• 摄像头 — 告诉我IP自动检测</p>
+              <p>• 大模型 — 本地Ollama或云API</p>
+              <p>• YOLO — 检查状态或安装</p>
+              <p>• 巡检策略、传感器、执行器</p>
+              <p>输入 <strong>setup</strong> 查看系统状态</p>
+            </div>
+          </div>
+          <div class="p-3 border-t border-outline-variant/10 flex gap-2">
+            <input id="vlp-chat-input" class="chat-input flex-1" placeholder="输入配置指令..." onkeydown="if(event.key==='Enter')vlpSendChat()">
+            <button onclick="vlpSendChat()" class="px-4 py-2 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-all text-xs font-headline">发送</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto controls -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-headline text-xs font-bold tracking-tight">自动巡检</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="vlp-auto-patrol" class="sr-only peer" onchange="vlpTogglePatrol()">
+              <div class="w-9 h-5 bg-neutral-700 rounded-full peer-checked:bg-lime-500/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+            </label>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="vlpPatrolStart()" class="flex-1 py-2 rounded-lg border border-lime-500/20 bg-lime-500/10 text-lime-400 text-[10px] font-headline uppercase hover:bg-lime-500/20 transition-all">开始巡检</button>
+            <button onclick="vlpPatrolStop()" class="flex-1 py-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 text-[10px] font-headline uppercase hover:bg-red-500/20 transition-all">停止</button>
+          </div>
+        </div>
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-headline text-xs font-bold tracking-tight">自动分析</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="vlp-auto-analysis" class="sr-only peer" onchange="vlpToggleAnalysis()">
+              <div class="w-9 h-5 bg-neutral-700 rounded-full peer-checked:bg-cyan-500/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+            </label>
+          </div>
+          <div id="vlp-analysis-info" class="text-[10px] text-neutral-500 font-mono">未启动</div>
+        </div>
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-headline text-xs font-bold tracking-tight">自动照料</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="vlp-auto-care" class="sr-only peer" onchange="vlpToggleCare()">
+              <div class="w-9 h-5 bg-neutral-700 rounded-full peer-checked:bg-purple-500/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+            </label>
+          </div>
+          <div id="vlp-care-info" class="text-[10px] text-neutral-500 font-mono">根据诊断自动执行浇水/通风</div>
+        </div>
+      </div>
+
+      <!-- Latest analysis -->
+      <div id="vlp-latest-analysis" class="hidden bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="material-symbols-outlined text-purple-400" style="font-size:16px">analytics</span>
+          <span class="font-headline font-bold text-xs tracking-tight">最近分析</span>
+          <span id="vlp-analysis-time" class="ml-auto text-[10px] text-neutral-600 font-mono"></span>
+        </div>
+        <div id="vlp-analysis-content" class="text-xs text-neutral-300 whitespace-pre-wrap"></div>
+      </div>
+
+      <!-- Settings Panel (collapsible) -->
+      <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl overflow-hidden">
+        <button onclick="document.getElementById('vlp-settings-body').classList.toggle('hidden');this.querySelector('.arrow').classList.toggle('rotate-180')" class="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition-colors">
+          <span class="material-symbols-outlined text-neutral-400" style="font-size:16px">settings</span>
+          <span class="font-headline font-bold text-xs tracking-tight">系统设置</span>
+          <span class="arrow ml-auto material-symbols-outlined text-neutral-600 transition-transform" style="font-size:16px">expand_more</span>
+        </button>
+        <div id="vlp-settings-body" class="hidden border-t border-outline-variant/10 p-4 space-y-4">
+          <!-- LLM -->
+          <div>
+            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">大模型 (LLM)</div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
+              <div><label class="text-[10px] text-neutral-600">API URL</label>
+                <input id="vlp-s-llm-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="http://your-server:11434/v1/chat/completions"></div>
+              <div><label class="text-[10px] text-neutral-600">Model</label>
+                <input id="vlp-s-llm-model" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="qwen3-vl:8b"></div>
+              <div><label class="text-[10px] text-neutral-600">API Key (optional)</label>
+                <input id="vlp-s-llm-key" type="password" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="留空则不使用"></div>
+            </div>
+          </div>
+          <!-- Camera -->
+          <div>
+            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">摄像头</div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+              <div><label class="text-[10px] text-neutral-600">Snapshot URL</label>
+                <input id="vlp-s-cam-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="http://camera-ip/ISAPI/Streaming/channels/101/picture"></div>
+              <div><label class="text-[10px] text-neutral-600">Stream URL</label>
+                <input id="vlp-s-cam-stream" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="rtsp://..."></div>
+            </div>
+          </div>
+          <!-- PTZ -->
+          <div>
+            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">PTZ 云台</div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              <div><label class="text-[10px] text-neutral-600">PTZ URL</label>
+                <input id="vlp-s-ptz-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="http://camera-ip"></div>
+              <div><label class="text-[10px] text-neutral-600">用户名</label>
+                <input id="vlp-s-ptz-user" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="admin"></div>
+              <div><label class="text-[10px] text-neutral-600">密码</label>
+                <input id="vlp-s-ptz-pass" type="password" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none"></div>
+              <div class="flex items-end"><label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="vlp-s-ptz-on" class="sr-only peer">
+                <div class="w-9 h-5 bg-neutral-700 rounded-full peer-checked:bg-lime-500/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                <span class="ml-2 text-[10px] text-neutral-500">启用PTZ</span></label></div>
+            </div>
+          </div>
+          <!-- Patrol -->
+          <div>
+            <div class="text-[10px] text-neutral-500 font-headline uppercase mb-2">巡检策略</div>
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              <div><label class="text-[10px] text-neutral-600">策略</label>
+                <select id="vlp-s-patrol-strategy" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none">
+                  <option value="single">single — 单次拍照</option>
+                  <option value="sweep">sweep — PTZ网格扫描</option>
+                  <option value="vlm_active">vlm_active — 全景→聚焦→诊断</option>
+                </select></div>
+              <div><label class="text-[10px] text-neutral-600">间隔 (分钟)</label>
+                <input id="vlp-s-patrol-interval" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" value="30"></div>
+              <div><label class="text-[10px] text-neutral-600">Agent 间隔 (分钟)</label>
+                <input id="vlp-s-agent-interval" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" value="60"></div>
+            </div>
+          </div>
+          <!-- Save -->
+          <div class="flex items-center gap-3">
+            <button onclick="vlpSaveSettings()" class="px-6 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all text-xs font-headline uppercase tracking-widest">
+              <span class="material-symbols-outlined align-middle" style="font-size:14px">save</span> 保存设置
+            </button>
+            <span id="vlp-settings-status" class="text-[10px] text-neutral-600 font-mono"></span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /view-local -->
+
+    <!-- ════════════════════ VIEW: Agent ════════════════════ -->
+    <div id="view-agent" class="view-section" style="height:calc(100vh - 120px);display:none;flex-direction:column">
+      <!-- Agent header -->
+      <div class="flex items-center gap-4 mb-4 px-1">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-secondary-container/20 to-primary-container/20 border border-secondary-container/30 flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined text-secondary-container" style="font-size:20px;font-variation-settings:'FILL' 1">smart_toy</span>
+        </div>
+        <div>
+          <div class="font-headline font-bold text-sm tracking-tight">智慧温室 AI 助手</div>
+          <div class="text-[10px] text-secondary-container font-mono tracking-wide">mistral-large-3 · 实时传感器上下文</div>
+        </div>
+        <button onclick="clearChat()" class="ml-auto text-neutral-600 hover:text-neutral-400 transition-colors" title="清空对话">
+          <span class="material-symbols-outlined" style="font-size:18px">delete_sweep</span>
+        </button>
+      </div>
+
+      <!-- Chat area -->
+      <div class="flex-1 bg-surface-container-high/20 backdrop-blur-md rounded-full border border-outline-variant/10 overflow-hidden flex flex-col" style="min-height:0">
+        <div id="chat-messages">
+          <!-- Initial greeting -->
+          <div class="bubble-ai p-4 text-sm text-on-surface-variant font-body leading-relaxed">
+            <p>你好！我是 SmartAgri 智慧温室 AI 助手 🌱</p>
+            <p>我已接入当前传感器数据，可以帮你：分析温室环境状态、解读土壤肥力数据、给出灌溉/通风建议、解释各种读数含义。</p>
+            <p>请问有什么需要帮助的？</p>
+          </div>
+        </div>
+
+        <!-- Quick prompts -->
+        <div class="px-4 pb-3 flex gap-2 flex-wrap border-t border-outline-variant/10 pt-3" id="quick-prompts">
+          <button onclick="quickAsk('当前温室环境状态如何？')" class="text-[10px] font-headline uppercase tracking-wider px-3 py-1.5 rounded-full border border-outline-variant/20 text-neutral-500 hover:text-secondary-container hover:border-secondary-container/30 transition-all">环境状态</button>
+          <button onclick="quickAsk('土壤现在需要浇水吗？')" class="text-[10px] font-headline uppercase tracking-wider px-3 py-1.5 rounded-full border border-outline-variant/20 text-neutral-500 hover:text-secondary-container hover:border-secondary-container/30 transition-all">需要浇水？</button>
+          <button onclick="quickAsk('CO₂浓度是否正常？是否需要开启风扇？')" class="text-[10px] font-headline uppercase tracking-wider px-3 py-1.5 rounded-full border border-outline-variant/20 text-neutral-500 hover:text-secondary-container hover:border-secondary-container/30 transition-all">CO₂分析</button>
+          <button onclick="quickAsk('土壤氮磷钾含量如何？需要施肥吗？')" class="text-[10px] font-headline uppercase tracking-wider px-3 py-1.5 rounded-full border border-outline-variant/20 text-neutral-500 hover:text-secondary-container hover:border-secondary-container/30 transition-all">肥力评估</button>
+          <button onclick="quickAsk('给我一份今天的温室综合报告')" class="text-[10px] font-headline uppercase tracking-wider px-3 py-1.5 rounded-full border border-outline-variant/20 text-neutral-500 hover:text-secondary-container hover:border-secondary-container/30 transition-all">综合报告</button>
+        </div>
+
+        <!-- Input -->
+        <div class="border-t border-outline-variant/10 p-4 flex gap-3 items-end">
+          <textarea
+            id="chat-input"
+            class="chat-input flex-1"
+            placeholder="输入消息，按 Enter 发送，Shift+Enter 换行..."
+            rows="1"
+            onkeydown="handleChatKey(event)"
+            oninput="autoResize(this)"
+          ></textarea>
+          <button onclick="sendChat()" id="chat-send-btn"
+            class="shrink-0 w-10 h-10 rounded-xl bg-primary-container/20 border border-primary-container/30 flex items-center justify-center text-primary-container hover:bg-primary-container/30 transition-all disabled:opacity-40"
+            aria-label="发送">
+            <span class="material-symbols-outlined" style="font-size:18px">send</span>
+          </button>
+        </div>
+      </div>
+    </div><!-- /view-agent -->
+
+  </main>
+</div>
+
+<script>
+const TOKEN = "{{ token }}";
+const actionState = {};
+let soilChart, nkpChart, envChartBig, airEnvChart;
+let soilChartInited = false, atmChartInited = false;
+const chatHistory = [];
+let cameraSnaps = [], lightboxIdx = 0;
+const plantSensors = {};
+
+// ── Chart defaults ────────────────────────────────────────
+Chart.defaults.color = '#85967c';
+Chart.defaults.font.family = "'Space Grotesk', sans-serif";
+Chart.defaults.font.size = 10;
+const CHART_OPT = {
+  responsive:true, maintainAspectRatio:false, animation:false,
+  plugins:{legend:{position:'top',labels:{boxWidth:8,boxHeight:3,padding:12,color:'#baccb0'}}},
+  scales:{
+    x:{display:false},
+    y:{beginAtZero:false,grid:{color:'rgba(60,75,53,.2)',drawBorder:false},border:{color:'transparent'},ticks:{color:'#85967c',maxTicksLimit:4,font:{size:9}}}
+  }
+};
+
+// ── View switching ────────────────────────────────────────
+let currentView = 'overview';
+function setView(v) {
+  document.querySelectorAll('.view-section').forEach(el => {
+    el.classList.remove('active');
+    el.style.display = 'none';
+  });
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active','text-lime-400'));
+  document.querySelectorAll('.nav-tab').forEach(el => {
+    el.className = 'nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm';
+  });
+
+  const section = document.getElementById('view-' + v);
+  if (!section) return;
+  if (v === 'agent') {
+    section.style.display = 'flex';
+  } else {
+    section.classList.add('active');
+    section.style.display = '';
+  }
+
+  // Sidebar nav
+  document.querySelectorAll(`[data-view="${v}"]`).forEach(el => el.classList.add('active'));
+
+  // Header tabs
+  const tabMap = {overview:0,soil:1,atm:2,history:3,camera:4,livecam:5,patrol:6,agent:7};
+  const tabs = document.querySelectorAll('.nav-tab');
+  if (tabs[tabMap[v]]) {
+    tabs[tabMap[v]].className = 'nav-tab text-lime-400 border-b-2 border-lime-400 pb-1 text-sm';
+  }
+
+  currentView = v;
+  document.getElementById('main-scroll').scrollTop = 0;
+
+  // Lazy init charts + data
+  if (v === 'soil' && !soilChartInited) { initSoilCharts(); soilChartInited = true; }
+  if (v === 'atm'  && !atmChartInited)  { initAtmChart();   atmChartInited  = true; }
+  if (v === 'history') loadHistoryLogs();
+  if (v === 'camera')  loadCameraGallery();
+  if (v === 'patrol')  loadPatrolHistory();
+  if (v === 'livecam') startHikCam(); else stopHikCam();
+}
+
+// ── Devices (status only, no display in camera card) ──────
+async function refreshDevices() {}
+
+// ── Realtime data ──────────────────────────────────────────
+const RT_KEYS = ['co2','temperature','moisture','nitrogen','phosphorus','potassium','air_temperature','air_humidity'];
+const BAR_MAX = {temperature:60,moisture:100,nitrogen:2000,phosphorus:2000,potassium:3000,air_temperature:60,air_humidity:100};
+
+function applyRealtime(m) {
+  let updated = false;
+  RT_KEYS.forEach(k => {
+    const v = m[k]; if (v == null) return;
+    const num = parseFloat(v);
+    plantSensors[k] = num;
+    const el = document.getElementById('v-' + k);
+    if (el) { el.textContent = num.toFixed(1); updated = true; }
+    if (k === 'co2') {
+      const big = document.getElementById('v-co2-big');
+      if (big) big.textContent = num.toFixed(0);
+      const atmBig = document.getElementById('atm-v-co2');
+      if (atmBig) atmBig.textContent = num.toFixed(0);
+    }
+    if (k === 'air_temperature') {
+      const el = document.getElementById('atm-v-air-temp');
+      if (el) el.textContent = num.toFixed(1);
+    }
+    if (k === 'air_humidity') {
+      const el = document.getElementById('atm-v-air-hum');
+      if (el) el.textContent = num.toFixed(1);
+    }
+    const bar = document.getElementById('bar-' + k);
+    if (bar && BAR_MAX[k]) bar.style.width = Math.min(100, (num / BAR_MAX[k]) * 100).toFixed(1) + '%';
+    // Soil view mirrors
+    const soilMap = {temperature:'soil-v-temp',moisture:'soil-v-moist',nitrogen:'soil-v-n',phosphorus:'soil-v-p',potassium:'soil-v-k'};
+    if (soilMap[k]) { const se = document.getElementById(soilMap[k]); if (se) se.textContent = num.toFixed(1); }
+  });
+  if (updated) {
+    document.getElementById('update-time').textContent =
+      new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    updatePlantScore();
+  }
+}
+
+// ── Plant score ────────────────────────────────────────────
+function updatePlantScore() {
+  const s = plantSensors;
+  const checks = [];
+  if (s.co2 != null)       checks.push({score: s.co2<=1500?100:s.co2<=2000?55:15, weight:2.5});
+  if (s.moisture != null)  checks.push({score: (s.moisture>=30&&s.moisture<=70)?100:(s.moisture>=15&&s.moisture<=80)?60:20, weight:2});
+  if (s.temperature != null) checks.push({score: (s.temperature>=15&&s.temperature<=28)?100:(s.temperature>=10&&s.temperature<=35)?65:25, weight:1.5});
+  if (s.nitrogen != null)  {
+    const avg = ((s.nitrogen||0)+(s.phosphorus||0)+(s.potassium||0))/3;
+    checks.push({score: (avg>=80&&avg<=350)?90:(avg>0)?65:30, weight:1});
+  }
+  if (!checks.length) return;
+  const tw = checks.reduce((a,c)=>a+c.weight,0);
+  const score = Math.round(checks.reduce((a,c)=>a+c.score*c.weight,0)/tw);
+
+  const C = 352;
+  const color = score>=80?'#39ff14':score>=60?'#f59e0b':score>=40?'#fb923c':'#ef4444';
+  const glow  = score>=80?'rgba(57,255,20,.5)':score>=60?'rgba(245,158,11,.4)':score>=40?'rgba(251,146,60,.4)':'rgba(239,68,68,.4)';
+  const lbl   = score>=80?'健康优秀':score>=60?'状态良好':score>=40?'一般':'需要关注';
+
+  const arc = document.getElementById('plant-score-arc');
+  if (arc) { arc.style.strokeDasharray=`${(score/100*C).toFixed(1)} ${C}`; arc.style.stroke=color; arc.style.filter=`drop-shadow(0 0 6px ${glow})`; }
+  const numEl = document.getElementById('plant-score-num');
+  if (numEl) { numEl.textContent=score; numEl.style.color=color; numEl.style.textShadow=`0 0 20px ${glow}`; }
+  const lblEl = document.getElementById('plant-score-label');
+  if (lblEl) lblEl.textContent=lbl;
+
+  const issues = [];
+  if (s.co2>2000) issues.push('CO₂偏高'); else if(s.co2>1500) issues.push('CO₂略高');
+  if (s.moisture<20) issues.push('土壤过干'); else if(s.moisture>80) issues.push('土壤过湿');
+  if (s.temperature<15) issues.push('温度偏低'); else if(s.temperature>28) issues.push('温度偏高');
+  const tipsEl = document.getElementById('plant-score-tips');
+  if (tipsEl) tipsEl.textContent = issues.length ? issues.join(' · ') : '各项指标正常';
+}
+
+async function refreshRealtime() {
+  try {
+    const data = await fetch('/api/sensors/latest').then(r => r.json());
+    const m = {};
+    data.forEach(row => { Object.keys(row).forEach(k => { if (row[k] != null) m[k] = row[k]; }); });
+    applyRealtime(m);
+  } catch(_) {}
+}
+
+// ── SSE ────────────────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource('/api/stream');
+  es.onmessage = e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.node_id === '__control__') applyControlState(d);
+      else { applyRealtime(d); applyCharts(d); }
+    } catch(_) {}
+  };
+  es.onerror = () => { es.close(); setTimeout(connectSSE, 5000); };
+}
+
+// ── Charts: 土壤 view ─────────────────────────────────────
+async function initSoilCharts() {
+  try {
+    const soilData = await fetch('/api/sensors?node_id=30aea49c97d8&limit=60').then(r => r.json());
+    const soilPts = soilData.filter(r => r.moisture != null).reverse();
+    soilChart = new Chart(document.getElementById('soilChart'), {
+      type:'line', options:CHART_OPT,
+      data:{labels:soilPts.map((_,i)=>i), datasets:[
+        {label:'温度 °C',data:soilPts.map(r=>r.temperature??null),borderColor:'#79ff5b',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
+        {label:'湿度 %', data:soilPts.map(r=>r.moisture??null), borderColor:'#00f4fe',backgroundColor:'rgba(0,244,254,.05)',borderWidth:1.5,tension:.4,pointRadius:0,fill:true}
+      ]}
+    });
+    const nkpPts = soilData.filter(r => r.nitrogen != null).reverse();
+    nkpChart = new Chart(document.getElementById('nkpChart'), {
+      type:'line', options:CHART_OPT,
+      data:{labels:nkpPts.map((_,i)=>i), datasets:[
+        {label:'N',data:nkpPts.map(r=>r.nitrogen??null),   borderColor:'#a78bfa',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
+        {label:'P',data:nkpPts.map(r=>r.phosphorus??null), borderColor:'#f472b6',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0},
+        {label:'K',data:nkpPts.map(r=>r.potassium??null),  borderColor:'#fb923c',backgroundColor:'transparent',borderWidth:1.5,tension:.4,pointRadius:0}
+      ]}
+    });
+  } catch(_) {}
+}
+
+// ── Charts: 大气 view ─────────────────────────────────────
+const ATM_OPT = {
+  responsive:true, maintainAspectRatio:false, animation:false,
+  interaction:{mode:'index',intersect:false},
+  plugins:{legend:{display:true,labels:{color:'#9ca3af',font:{size:10},boxWidth:12}}},
+  scales:{
+    x:{display:false},
+    y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#6b7280',maxTicksLimit:5}},
+  }
+};
+
+async function initAtmChart() {
+  try {
+    const [d1, d2] = await Promise.all([
+      fetch('/api/sensors?node_id=esp32_co2&limit=80').then(r=>r.json()),
+      fetch('/api/sensors?node_id=greenhouse_zigbee&limit=80').then(r=>r.json()),
+    ]);
+    const all = [...d1, ...d2].sort((a,b)=>a.timestamp.localeCompare(b.timestamp)).slice(-80);
+    const labels   = all.map(r => r.timestamp.slice(11,16));
+    const co2Data  = all.map(r => r.co2);
+    const tempData = all.map(r => r.air_temperature);
+    const humData  = all.map(r => r.air_humidity);
+
+    // 图1：CO₂
+    envChartBig = new Chart(document.getElementById('envChartBig'), {
+      type:'line',
+      options: JSON.parse(JSON.stringify(ATM_OPT)),
+      data:{ labels, datasets:[
+        { label:'CO₂ ppm', data:co2Data,
+          borderColor:'#39ff14', backgroundColor:'rgba(57,255,20,.07)',
+          borderWidth:2, tension:.4, pointRadius:0, fill:true },
+      ]}
+    });
+
+    // 图2：空气温湿度
+    airEnvChart = new Chart(document.getElementById('airEnvChart'), {
+      type:'line',
+      options: JSON.parse(JSON.stringify(ATM_OPT)),
+      data:{ labels, datasets:[
+        { label:'空气温度°C', data:tempData,
+          borderColor:'#f87171', backgroundColor:'rgba(248,113,113,.07)',
+          borderWidth:2, tension:.4, pointRadius:0, fill:true },
+        { label:'空气湿度%', data:humData,
+          borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.07)',
+          borderWidth:2, tension:.4, pointRadius:0, fill:false },
+      ]}
+    });
+  } catch(_) {}
+}
+
+function pushPoint(chart, t, vals, max=50) {
+  if (!chart) return;
+  chart.data.labels.push(t);
+  vals.forEach((v,i) => chart.data.datasets[i].data.push(v));
+  if (chart.data.labels.length > max) {
+    chart.data.labels.shift();
+    chart.data.datasets.forEach(ds => ds.data.shift());
+  }
+  chart.update('none');
+}
+
+function applyCharts(d) {
+  const t = Date.now();
+  if (d.node_id === 'greenhouse_zigbee' || d.node_id === 'esp32_co2') {
+    if (d.co2 != null)           pushPoint(envChartBig,  t, [d.co2], 80);
+    if (d.air_temperature != null || d.air_humidity != null)
+      pushPoint(airEnvChart, t, [d.air_temperature ?? null, d.air_humidity ?? null], 80);
+  }
+  if (d.node_id === '30aea49c97d8') {
+    if (d.moisture != null) pushPoint(soilChart, t, [d.temperature??null, d.moisture]);
+    if (d.nitrogen != null) pushPoint(nkpChart, t, [d.nitrogen, d.phosphorus??null, d.potassium??null]);
+  }
+}
+
+// ── Control ────────────────────────────────────────────────
+async function syncControlState() {
+  try { const s = await fetch('/api/control/state').then(r=>r.json()); applyControlState(s); } catch(_) {}
+}
+function applyControlState(state) {
+  Object.entries(state).forEach(([action, on]) => {
+    const btn = document.getElementById('btn-' + action);
+    if (!btn) return;
+    btn.classList.remove('on-light','on-pump','on-curtain','on-fan');
+    if (on) btn.classList.add('on-' + action);
+    btn.setAttribute('aria-pressed', String(on));
+    actionState[action] = on;
+  });
+}
+async function toggle(action, btn) {
+  actionState[action] = !(actionState[action] ?? false);
+  const on = actionState[action];
+  btn.classList.remove('on-light','on-pump','on-curtain','on-fan');
+  if (on) btn.classList.add('on-' + action);
+  btn.setAttribute('aria-pressed', String(on));
+  try {
+    await fetch('/api/control', {method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+TOKEN},
+      body:JSON.stringify({action,enable:on,source:'web'})});
+  } catch(_) {}
+}
+
+// ── Camera overview (with history navigation) ──────────────
+let ovSnaps = [], ovIdx = 0;
+
+async function refreshCamera() {
+  // 直接从球机获取实时画面
+  const img = document.getElementById('camera-img');
+  img.src = '/api/hik/snapshot?t=' + Date.now();
+  img.onload = () => { img.style.cursor = 'zoom-in'; };
+  document.getElementById('camera-time').textContent =
+    new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  // Also load history for gallery
+  try {
+    const snaps = await fetch('/api/camera/history?limit=6').then(r => r.json());
+    if (snaps.length) { ovSnaps = snaps; ovIdx = 0; }
+  } catch(_) {}
+}
+
+function renderOverviewCamera() {
+  const s = ovSnaps[ovIdx];
+  if (!s) return;
+  const img = document.getElementById('camera-img');
+  img.src = `/api/camera/image/${s.id}`;
+  img.onload = () => { img.style.cursor = 'zoom-in'; };
+  document.getElementById('camera-time').textContent =
+    new Date(s.timestamp).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const idxEl = document.getElementById('ov-index');
+  if (ovSnaps.length > 1) { idxEl.textContent = `${ovIdx+1}/${ovSnaps.length}`; idxEl.classList.remove('hidden'); }
+  document.getElementById('ov-prev').style.opacity = ovIdx === ovSnaps.length-1 ? '0.3':'1';
+  document.getElementById('ov-next').style.opacity = ovIdx === 0 ? '0.3':'1';
+}
+
+function overviewNav(dir) {
+  // dir=-1 → older photo, dir=1 → newer photo
+  const next = ovIdx - dir;
+  if (next < 0 || next >= ovSnaps.length) return;
+  ovIdx = next;
+  renderOverviewCamera();
+}
+
+async function capture() {
+  try { await fetch('/api/camera/capture',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}); } catch(_) {}
+  setTimeout(refreshCamera, 14000);
+}
+
+// ── Camera gallery ─────────────────────────────────────────
+async function loadCameraGallery() {
+  try {
+    const snaps = await fetch('/api/camera/history?limit=6').then(r => r.json());
+    cameraSnaps = snaps;
+    const gallery = document.getElementById('camera-gallery');
+    if (!snaps.length) {
+      gallery.innerHTML = '<div class="col-span-3 text-center text-neutral-600 py-16 font-headline text-sm">暂无照片</div>';
+      return;
+    }
+    gallery.innerHTML = snaps.map((s, i) => {
+      const ts = new Date(s.timestamp).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      return `<div class="cam-thumb" onclick="openLightbox(${i})">
+        <img src="/api/camera/image/${s.id}" alt="温室照片 ${ts}" loading="lazy">
+        <div class="px-3 py-2 bg-surface-container-lowest/80">
+          <div class="font-mono text-[10px] text-neutral-500">${ts}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(_) {}
+}
+
+// Lightbox with left/right navigation
+function openLightbox(idx) {
+  lightboxIdx = idx;
+  document.getElementById('smartagri-lb')?.remove();
+  const lb = document.createElement('div');
+  lb.id = 'smartagri-lb';
+  lb.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center';
+  lb.addEventListener('click', e => { if(e.target===lb) closeLightbox(); });
+  lb.innerHTML = `
+    <button onclick="closeLightbox()" style="position:absolute;top:20px;right:24px;color:#85967c;font-size:26px;background:none;border:none;cursor:pointer;line-height:1;padding:4px;z-index:1">✕</button>
+    <button id="lb-prev" onclick="lbNav(-1)" style="position:absolute;left:20px;top:50%;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;transition:background .15s">&#8249;</button>
+    <button id="lb-next" onclick="lbNav(1)"  style="position:absolute;right:20px;top:50%;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;transition:background .15s">&#8250;</button>
+    <div style="display:flex;flex-direction:column;align-items:center;max-width:90vw">
+      <img id="lb-img" style="max-width:90vw;max-height:78vh;border-radius:.75rem;object-fit:contain;display:block">
+      <div id="lb-ts" style="margin-top:10px;font-family:monospace;font-size:11px;color:#85967c"></div>
+      <div id="lb-count" style="margin-top:4px;font-family:monospace;font-size:10px;color:#3c4b35"></div>
+    </div>`;
+  document.body.appendChild(lb);
+  lb._key = e => { if(e.key==='ArrowLeft')lbNav(-1); if(e.key==='ArrowRight')lbNav(1); if(e.key==='Escape')closeLightbox(); };
+  document.addEventListener('keydown', lb._key);
+  lbRender();
+}
+function closeLightbox() {
+  const lb = document.getElementById('smartagri-lb');
+  if (!lb) return;
+  document.removeEventListener('keydown', lb._key);
+  lb.remove();
+}
+function lbNav(dir) {
+  const next = lightboxIdx + dir;
+  if (next < 0 || next >= cameraSnaps.length) return;
+  lightboxIdx = next;
+  lbRender();
+}
+function lbRender() {
+  const s = cameraSnaps[lightboxIdx];
+  const ts = new Date(s.timestamp).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('lb-img').src = `/api/camera/image/${s.id}`;
+  document.getElementById('lb-ts').textContent = ts;
+  document.getElementById('lb-count').textContent = `${lightboxIdx+1} / ${cameraSnaps.length}`;
+  document.getElementById('lb-prev').style.opacity = lightboxIdx===0 ? '0.3':'1';
+  document.getElementById('lb-next').style.opacity = lightboxIdx===cameraSnaps.length-1 ? '0.3':'1';
+}
+
+// ── Overview camera click ──────────────────────────────────
+function openOverviewImg() {
+  const s = ovSnaps[ovIdx];
+  if (!s) return;
+  const src = `/api/camera/image/${s.id}`;
+  const ts = document.getElementById('camera-time').textContent;
+  const lb = document.createElement('div');
+  lb.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out';
+  lb.onclick = () => lb.remove();
+  lb.innerHTML = `<img src="${src}" style="max-width:90vw;max-height:82vh;border-radius:.75rem;object-fit:contain">
+    <div style="margin-top:10px;font-family:monospace;font-size:11px;color:#85967c">${ts}</div>`;
+  document.body.appendChild(lb);
+}
+
+// ── History logs ───────────────────────────────────────────
+const ACTION_NAMES = {light:'灯光',pump:'水泵',curtain:'水管',fan:'风扇'};
+async function loadHistoryLogs() {
+  try {
+    const logs = await fetch('/api/control/logs?limit=50').then(r => r.json());
+    const el = document.getElementById('history-logs-list');
+    if (!logs.length) { el.innerHTML = '<div class="px-6 py-8 text-neutral-600 text-center font-headline text-sm">暂无记录</div>'; return; }
+    el.innerHTML = logs.map(l => {
+      const ts  = new Date(l.timestamp).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const name = ACTION_NAMES[l.action] || l.action;
+      const onCls = l.enable ? 'text-primary-fixed-dim' : 'text-neutral-500';
+      const onStr = l.enable ? 'ON' : 'OFF';
+      return `<div class="grid grid-cols-5 px-6 py-3.5 hover:bg-surface-container/30 transition-colors">
+        <span class="font-mono text-[11px] text-neutral-500">${ts}</span>
+        <span class="font-headline text-[11px] uppercase tracking-wide">${name}</span>
+        <span class="font-mono text-[11px] font-bold ${onCls}">[${onStr}]</span>
+        <span class="font-mono text-[11px] text-neutral-600">${l.duration ?? '--'}</span>
+        <span class="font-mono text-[11px] text-neutral-600">${l.source || 'api'}</span>
+      </div>`;
+    }).join('');
+  } catch(_) {}
+}
+
+// ── Agent chat ─────────────────────────────────────────────
+async function sendChat() {
+  const inp = document.getElementById('chat-input');
+  const msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = '';
+  inp.style.height = '';
+  addBubble('user', msg);
+  chatHistory.push({role:'user', content:msg});
+  const thinkId = addThinking();
+  document.getElementById('chat-send-btn').disabled = true;
+  try {
+    const res = await fetch('/api/agent/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', Authorization:'Bearer '+TOKEN},
+      body: JSON.stringify({messages: chatHistory})
+    });
+    removeThinking(thinkId);
+    if (!res.ok) throw new Error(await res.text());
+    const {content} = await res.json();
+    addBubble('ai', content);
+    chatHistory.push({role:'assistant', content});
+  } catch(e) {
+    removeThinking(thinkId);
+    addBubble('ai', `⚠ 请求失败：${e.message}`);
+  }
+  document.getElementById('chat-send-btn').disabled = false;
+}
+
+function quickAsk(text) {
+  document.getElementById('chat-input').value = text;
+  sendChat();
+}
+
+function addBubble(role, text) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = role === 'user' ? 'bubble-user p-4 text-sm font-body leading-relaxed' : 'bubble-ai p-4 text-sm text-on-surface-variant font-body leading-relaxed';
+  div.innerHTML = formatMsg(text);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addThinking() {
+  const id = 'think-' + Date.now();
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.id = id;
+  div.className = 'bubble-ai thinking p-4';
+  div.innerHTML = '<div class="dot-typing"><span></span><span></span><span></span></div>';
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
+
+function removeThinking(id) {
+  document.getElementById(id)?.remove();
+}
+
+function formatMsg(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`(.+?)`/g,'<code>$1</code>')
+    .replace(/\n/g,'<br>');
+}
+
+function clearChat() {
+  chatHistory.length = 0;
+  const c = document.getElementById('chat-messages');
+  c.innerHTML = `<div class="bubble-ai p-4 text-sm text-on-surface-variant font-body leading-relaxed">
+    <p>对话已清空。有什么需要帮助的吗？</p></div>`;
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function autoResize(el) {
+  el.style.height = '';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── Hikvision Camera ────────────────────────────────────────
+let hikTimer = null;
+
+function startHikCam() {
+  startHikStream();
+}
+
+function stopHikCam() {
+  stopHikStream();
+}
+
+const CAM_PROXY  = '/api/hik';
+const GO2RTC     = '/api/hik';
+const STREAM_NAME = 'hik_ptz';
+
+let _pc = null;
+
+function _setStatus(connected) {
+  const dot     = document.getElementById('hik-status-dot');
+  const liveDot = document.getElementById('hik-live-dot');
+  const txt     = document.getElementById('hik-status-text');
+  const overlay = document.getElementById('hik-overlay');
+  const snapTime = document.getElementById('hik-snap-time');
+  if (connected) {
+    dot.className = liveDot.className = 'inline-block w-2 h-2 rounded-full bg-green-400';
+    liveDot.style.boxShadow = '0 0 6px #4ade80';
+    txt.textContent = '已连接';
+    if (overlay) overlay.style.display = 'none';
+    snapTime.textContent = new Date().toLocaleTimeString('zh-CN');
+  } else {
+    dot.className = liveDot.className = 'inline-block w-2 h-2 rounded-full bg-red-500';
+    liveDot.style.boxShadow = 'none';
+    txt.textContent = '重连中...';
+  }
+}
+
+async function startHikStream() {
+  stopHikStream();
+  const video = document.getElementById('hik-video');
+
+  try {
+    const pc = new RTCPeerConnection();
+    _pc = pc;
+    pc.addTransceiver('video', {direction: 'recvonly'});
+    pc.addTransceiver('audio', {direction: 'recvonly'});
+
+    pc.ontrack = e => {
+      if (e.track.kind === 'video') {
+        video.srcObject = e.streams[0];
+        _setStatus(true);
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        _setStatus(false);
+        setTimeout(startHikStream, 3000);
+      }
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const resp = await fetch(`${GO2RTC}/webrtc?src=${STREAM_NAME}`, {
+      method: 'POST',
+      body: offer.sdp,
+      headers: {'Content-Type': 'application/sdp'}
+    });
+    if (!resp.ok) throw new Error('go2rtc ' + resp.status);
+    const answer = await resp.text();
+    await pc.setRemoteDescription({type: 'answer', sdp: answer});
+  } catch(e) {
+    console.warn('WebRTC 失败，降级 MJPEG', e);
+    _startMjpegFallback();
+  }
+}
+
+function _startMjpegFallback() {
+  const img = document.getElementById('hik-img');
+  const MJPEG_URL = '/api/hik/frame.jpeg?src=hik_ptz';
+  img.style.display = 'block';
+  document.getElementById('hik-video').style.display = 'none';
+  img.onload = () => _setStatus(true);
+  img.onerror = () => {
+    _setStatus(false);
+    setTimeout(() => { if (img.src) img.src = MJPEG_URL + '?t=' + Date.now(); }, 3000);
+  };
+  img.src = MJPEG_URL;
+  clearInterval(window._hikReconnTimer);
+  window._hikReconnTimer = setInterval(() => {
+    if (img.src && img.naturalWidth === 0) img.src = MJPEG_URL + '?t=' + Date.now();
+  }, 5000);
+}
+
+function stopHikStream() {
+  if (_pc) { _pc.close(); _pc = null; }
+  clearInterval(window._hikReconnTimer);
+  const video = document.getElementById('hik-video');
+  if (video) { video.srcObject = null; }
+  const img = document.getElementById('hik-img');
+  if (img) img.src = '';
+}
+
+async function hikSnap() {} // no-op, kept for compatibility
+
+function hikImgError() {
+  const overlay = document.getElementById('hik-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
+async function hikPTZ(pan, tilt, zoom) {
+  try {
+    await fetch(`${CAM_PROXY}/ptz?pan=${pan}&tilt=${tilt}&zoom=${zoom}`, {method:'POST'});
+  } catch(e) {}
+}
+
+async function hikStop() {
+  try {
+    await fetch(`${CAM_PROXY}/ptz?pan=0&tilt=0&zoom=0`, {method:'POST'});
+  } catch(e) {}
+}
+
+// ── Health Diagnosis ──────────────────────────────────────
+function _healthBadge(h) {
+  const colors = {
+    healthy: 'bg-lime-500/20 text-lime-400 border-lime-500/30',
+    mild_stress: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    stressed: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    severe_stress: 'bg-red-500/20 text-red-400 border-red-500/30',
+  };
+  const labels = {healthy:'健康',mild_stress:'轻微胁迫',stressed:'胁迫',severe_stress:'严重胁迫'};
+  const cls = colors[h] || 'bg-neutral-500/20 text-neutral-400 border-neutral-500/30';
+  const label = labels[h] || h;
+  return `<span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-headline uppercase tracking-wider border ${cls}">${label}</span>`;
+}
+
+function _renderDiag(d) {
+  if (!d || d.error) return `<div class="text-red-400 text-xs">${d?.error || '诊断失败'}</div>`;
+  const species = d.species || d.type || 'unknown';
+  const health = d.health || 'unknown';
+  const symptoms = d.symptoms || d.details || d.description || '无症状描述';
+  const cause = d.cause || '';
+  const action = d.action || '';
+  let html = `
+    <div class="flex items-center gap-2">
+      <span class="text-on-surface text-sm font-bold">${species}</span>
+      ${_healthBadge(health)}
+    </div>
+    <div class="text-neutral-400 text-xs leading-relaxed">${symptoms}</div>`;
+  if (cause) html += `<div class="text-xs"><span class="text-yellow-500">原因:</span> <span class="text-neutral-400">${cause}</span></div>`;
+  if (action) html += `<div class="text-xs"><span class="text-cyan-400">建议:</span> <span class="text-neutral-400">${action}</span></div>`;
+  return html;
+}
+
+async function runDiagnosis() {
+  const btn = document.getElementById('diag-btn');
+  const btnText = document.getElementById('diag-btn-text');
+  btn.disabled = true;
+  btnText.textContent = '诊断中...';
+  btn.classList.add('opacity-50');
+
+  const panel = document.getElementById('diag-panel');
+  panel.classList.remove('hidden');
+  document.getElementById('diag-vision').innerHTML = '<div class="text-cyan-400/60 text-xs flex items-center gap-2"><span class="dot-typing"><span></span><span></span><span></span></span> VLM 分析中...</div>';
+  document.getElementById('diag-multi').innerHTML = '<div class="text-lime-400/60 text-xs flex items-center gap-2"><span class="dot-typing"><span></span><span></span><span></span></span> VLM 分析中...</div>';
+
+  try {
+    const resp = await fetch('/api/hik/diagnose?mode=both', {method:'POST'});
+    const data = await resp.json();
+
+    document.getElementById('diag-time').textContent = new Date(data.timestamp).toLocaleString('zh-CN');
+
+    if (data.vision_only) {
+      document.getElementById('diag-vision').innerHTML = _renderDiag(data.vision_only);
+    }
+    if (data.multi_modal) {
+      document.getElementById('diag-multi').innerHTML = _renderDiag(data.multi_modal);
+    }
+    if (data.sensor_data) {
+      const s = data.sensor_data;
+      const parts = [];
+      if (s.soil_moisture) parts.push(`土壤湿度 ${s.soil_moisture}%`);
+      if (s.temperature) parts.push(`温度 ${s.temperature}°C`);
+      if (s.air_temperature) parts.push(`气温 ${s.air_temperature}°C`);
+      if (s.humidity) parts.push(`湿度 ${s.humidity}%`);
+      if (s.co2) parts.push(`CO₂ ${s.co2}ppm`);
+      const info = document.getElementById('diag-sensor-info');
+      info.textContent = '传感器: ' + parts.join(' · ');
+      info.classList.remove('hidden');
+    }
+  } catch(e) {
+    document.getElementById('diag-vision').innerHTML = `<div class="text-red-400 text-xs">请求失败: ${e.message}</div>`;
+    document.getElementById('diag-multi').innerHTML = '';
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = '健康诊断';
+    btn.classList.remove('opacity-50');
+  }
+}
+
+// ── Patrol ──────────────────────────────────────────────────
+let patrolPollTimer = null;
+let patrolPlantsData = [];
+
+async function patrolStart() {
+  const strategy = document.getElementById('patrol-strategy').value;
+  document.getElementById('patrol-btn-start').disabled = true;
+  document.getElementById('patrol-btn-stop').disabled = false;
+  document.getElementById('patrol-btn-stop').classList.remove('opacity-40');
+  document.getElementById('patrol-plants').innerHTML = '';
+
+  await fetch('/api/patrol/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({strategy})
+  });
+  patrolPollTimer = setInterval(patrolPoll, 2000);
+}
+
+async function patrolStop() {
+  await fetch('/api/patrol/stop', {method: 'POST'});
+  document.getElementById('patrol-btn-stop').disabled = true;
+  document.getElementById('patrol-btn-stop').classList.add('opacity-40');
+}
+
+function _patrolHealthBadge(h) {
+  const map = {
+    healthy: ['健康', 'lime'], mild_stress: ['轻微胁迫', 'yellow'],
+    stressed: ['胁迫', 'orange'], severe_stress: ['严重', 'red']
+  };
+  const [label, color] = map[h] || [h || '未知', 'neutral'];
+  return `<span class="px-2 py-0.5 rounded-full text-[10px] font-headline border border-${color}-500/30 bg-${color}-500/15 text-${color}-400">${label}</span>`;
+}
+
+function renderPatrolPlants() {
+  const el = document.getElementById('patrol-plants');
+  if (!patrolPlantsData.length) { el.innerHTML = ''; return; }
+  el.innerHTML = patrolPlantsData.map((p, i) => {
+    const img = p.closeup_b64
+      ? `<img src="data:image/jpeg;base64,${p.closeup_b64}" class="w-[200px] h-[150px] object-cover rounded-lg bg-surface-container flex-shrink-0">`
+      : `<div class="w-[200px] h-[150px] rounded-lg bg-surface-container flex items-center justify-center text-neutral-600 text-xs flex-shrink-0">等待...</div>`;
+    const saved = p.yolo_saved
+      ? '<span class="text-[10px] px-2 py-0.5 rounded-full bg-lime-500/15 text-lime-400 border border-lime-500/20">已保存</span>'
+      : '<span class="text-[10px] px-2 py-0.5 rounded-full bg-neutral-500/15 text-neutral-500 border border-neutral-500/20">跳过</span>';
+    return `<div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-3 flex gap-4 items-start">
+      ${img}
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-on-surface font-bold text-sm">#${i+1} ${p.type}</span>
+          ${_patrolHealthBadge(p.health)}
+          <span class="text-[10px] text-neutral-600 font-mono ml-auto">${(p.confidence*100).toFixed(0)}%</span>
+        </div>
+        <div class="text-neutral-400 text-xs leading-relaxed mb-1">${p.details || ''}</div>
+        <div class="flex items-center gap-2">${saved}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function patrolPoll() {
+  try {
+    const r = await fetch('/api/patrol/status');
+    const d = await r.json();
+
+    const stepEl = document.getElementById('patrol-step');
+    if (d.status === 'running') {
+      stepEl.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-lime-400 border-t-transparent rounded-full animate-spin mr-2"></span>' + (d.current_step || '');
+    } else {
+      stepEl.textContent = d.current_step || d.status || '就绪';
+    }
+
+    document.getElementById('patrol-n-found').textContent = d.overview_plants || 0;
+    document.getElementById('patrol-n-confirmed').textContent = d.confirmed_plants || 0;
+    document.getElementById('patrol-n-rejected').textContent = d.rejected || 0;
+    document.getElementById('patrol-n-dataset').textContent = d.dataset_size || 0;
+    document.getElementById('patrol-ptz-travel').textContent = (d.ptz_travel_deg || 0).toFixed(1) + '°';
+
+    if (d.plants && d.plants.length) {
+      patrolPlantsData = d.plants;
+      renderPatrolPlants();
+    }
+
+    if (d.status !== 'running') {
+      clearInterval(patrolPollTimer);
+      document.getElementById('patrol-btn-start').disabled = false;
+      document.getElementById('patrol-btn-stop').disabled = true;
+      document.getElementById('patrol-btn-stop').classList.add('opacity-40');
+    }
+  } catch(e) {}
+}
+
+async function patrolDiagnose() {
+  const btn = document.getElementById('patrol-btn-diag');
+  btn.disabled = true;
+  btn.classList.add('opacity-50');
+  const panel = document.getElementById('patrol-diag-panel');
+  panel.classList.remove('hidden');
+  document.getElementById('patrol-diag-vision').innerHTML = '<div class="text-cyan-400/60 text-xs flex items-center gap-2"><span class="dot-typing"><span></span><span></span><span></span></span> VLM 分析中...</div>';
+  document.getElementById('patrol-diag-multi').innerHTML = '<div class="text-lime-400/60 text-xs flex items-center gap-2"><span class="dot-typing"><span></span><span></span><span></span></span> VLM 分析中...</div>';
+
+  try {
+    const resp = await fetch('/api/hik/diagnose?mode=both', {method:'POST'});
+    const data = await resp.json();
+    document.getElementById('patrol-diag-time').textContent = new Date(data.timestamp).toLocaleString('zh-CN');
+    if (data.vision_only) document.getElementById('patrol-diag-vision').innerHTML = _renderDiag(data.vision_only);
+    if (data.multi_modal) document.getElementById('patrol-diag-multi').innerHTML = _renderDiag(data.multi_modal);
+    if (data.sensor_data) {
+      const s = data.sensor_data;
+      const parts = [];
+      if (s.soil_moisture) parts.push(`土壤湿度 ${s.soil_moisture}%`);
+      if (s.temperature) parts.push(`温度 ${s.temperature}°C`);
+      if (s.air_temperature) parts.push(`气温 ${s.air_temperature}°C`);
+      if (s.humidity) parts.push(`湿度 ${s.humidity}%`);
+      if (s.co2) parts.push(`CO₂ ${s.co2}ppm`);
+      const info = document.getElementById('patrol-diag-sensor');
+      info.textContent = '传感器: ' + parts.join(' · ');
+      info.classList.remove('hidden');
+    }
+  } catch(e) {
+    document.getElementById('patrol-diag-vision').innerHTML = `<div class="text-red-400 text-xs">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('opacity-50');
+  }
+}
+
+async function loadPatrolHistory() {
+  const el = document.getElementById('patrol-history');
+  el.innerHTML = '<div class="text-neutral-500 text-xs">加载中...</div>';
+  try {
+    const r = await fetch('/api/patrol/history');
+    const sessions = await r.json();
+    if (!sessions.length) { el.innerHTML = '<div class="text-neutral-600 text-xs">暂无记录</div>'; return; }
+    const strategyNames = {vlm_active:'VLM智能', fixed_route:'固定路线', random:'随机采样'};
+    el.innerHTML = sessions.map(s => `
+      <div class="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-container/40 border border-outline-variant/5">
+        <span class="text-[10px] font-headline uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+          s.strategy==='vlm_active' ? 'border-lime-500/30 text-lime-400' :
+          s.strategy==='fixed_route' ? 'border-cyan-500/30 text-cyan-400' :
+          'border-yellow-500/30 text-yellow-400'
+        }">${strategyNames[s.strategy] || s.strategy}</span>
+        <span class="text-xs text-neutral-400 font-mono">${s.start_time || '--'}</span>
+        <span class="text-xs text-neutral-500">发现 <strong class="text-lime-400">${s.overview_plants}</strong> → 确认 <strong class="text-cyan-400">${s.confirmed_plants}</strong></span>
+        <span class="text-[10px] text-neutral-600 ml-auto">${s.duration_s ? (s.duration_s/60).toFixed(1)+'min' : '--'} · PTZ ${(s.ptz_travel_deg||0).toFixed(0)}°</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full ${s.status==='complete' ? 'bg-lime-500/15 text-lime-400' : 'bg-yellow-500/15 text-yellow-400'}">${s.status==='complete'?'完成':'进行中'}</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="text-red-400 text-xs">加载失败: ${e.message}</div>`;
+  }
+}
+
+
+// ── VLM-Patrol 本地服务 ───────────────────────────────────
+const VLP = '/api/vlp';
+
+
+// ── Settings load/save ──
+function vlpLoadSettings(cfg) {
+  if (!cfg) return;
+  const s = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+  s('vlp-s-llm-url', cfg.llm?.url);
+  s('vlp-s-llm-model', cfg.llm?.model);
+  s('vlp-s-cam-url', cfg.camera?.snapshot_url);
+  s('vlp-s-cam-stream', cfg.camera?.stream_url);
+  s('vlp-s-ptz-url', cfg.ptz_url);
+  const ptzOn = document.getElementById('vlp-s-ptz-on');
+  if (ptzOn) ptzOn.checked = cfg.ptz_enabled || false;
+  const strat = document.getElementById('vlp-s-patrol-strategy');
+  if (strat && cfg.patrol?.strategy) strat.value = cfg.patrol.strategy;
+  s('vlp-s-patrol-interval', cfg.patrol?.interval);
+  s('vlp-s-agent-interval', cfg.agent?.interval);
+}
+
+async function vlpSaveSettings() {
+  const g = id => document.getElementById(id)?.value || '';
+  const data = {
+    llm: { url: g('vlp-s-llm-url'), model: g('vlp-s-llm-model'), api_key: g('vlp-s-llm-key') },
+    camera: { snapshot_url: g('vlp-s-cam-url'), stream_url: g('vlp-s-cam-stream') },
+    ptz: { url: g('vlp-s-ptz-url'), user: g('vlp-s-ptz-user'), pass: g('vlp-s-ptz-pass'),
+           enabled: document.getElementById('vlp-s-ptz-on')?.checked || false },
+    patrol: { strategy: g('vlp-s-patrol-strategy'),
+              interval_minutes: parseInt(g('vlp-s-patrol-interval')) || 30 },
+    agent: { interval_minutes: parseInt(g('vlp-s-agent-interval')) || 60 },
+  };
+  const status = document.getElementById('vlp-settings-status');
+  try {
+    const r = await fetch(VLP+'/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const j = await r.json();
+    if (j.status === 'ok') {
+      status.textContent = '\u2705 \u5df2\u4fdd\u5b58';
+      status.className = 'text-[10px] text-lime-400 font-mono';
+      vlpRefresh();
+    } else {
+      status.textContent = '\u274c ' + (j.error || 'failed');
+      status.className = 'text-[10px] text-red-400 font-mono';
+    }
+  } catch(e) {
+    status.textContent = '\u274c \u8fde\u63a5\u5931\u8d25';
+    status.className = 'text-[10px] text-red-400 font-mono';
+  }
+  setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+async function vlpRefresh() {
+  try {
+    const [cfg, patrol, agent, yolo] = await Promise.all([
+      fetch(VLP+'/config').then(r=>r.json()),
+      fetch(VLP+'/patrol/status').then(r=>r.json()),
+      fetch(VLP+'/agent/status').then(r=>r.json()),
+      fetch(VLP+'/yolo/status').then(r=>r.json()),
+    ]);
+    document.getElementById('vlp-conn-dot').className = 'w-2 h-2 rounded-full bg-lime-400';
+    document.getElementById('vlp-conn-text').textContent = '在线';
+    document.getElementById('vlp-conn-text').className = 'text-[10px] text-lime-400 font-mono';
+
+    // Cards
+    const score = agent.latest ? agent.latest.health_score : '--';
+    document.getElementById('vlp-health').textContent = score;
+    const plants = patrol.session ? patrol.session.plants.length : 0;
+    document.getElementById('vlp-plants').textContent = plants;
+    document.getElementById('vlp-dataset').textContent = yolo.dataset_size || 0;
+    document.getElementById('vlp-yolo').textContent = yolo.model_loaded ? '✓' : '✗';
+    document.getElementById('vlp-strategy').textContent = cfg.patrol?.strategy || '--';
+    vlpLoadSettings(cfg);
+
+    // Latest analysis
+    if (agent.latest) {
+      const panel = document.getElementById('vlp-latest-analysis');
+      panel.classList.remove('hidden');
+      document.getElementById('vlp-analysis-content').textContent =
+        `健康评分: ${agent.latest.health_score}/100\n${agent.latest.summary || ''}`;
+    }
+  } catch(e) {
+    document.getElementById('vlp-conn-dot').className = 'w-2 h-2 rounded-full bg-red-400';
+    document.getElementById('vlp-conn-text').textContent = '离线';
+    document.getElementById('vlp-conn-text').className = 'text-[10px] text-red-400 font-mono';
+  }
+}
+
+async function vlpSnapshot() {
+  const img = document.getElementById('vlp-cam-img');
+  img.src = VLP + '/ptz/snapshot?t=' + Date.now();
+  img.style.display = 'block';
+  document.getElementById('vlp-cam-placeholder').style.display = 'none';
+}
+
+async function vlpDetect() {
+  const panel = document.getElementById('vlp-detect-result');
+  const content = document.getElementById('vlp-detect-content');
+  panel.classList.remove('hidden');
+  content.textContent = 'VLM 检测中...';
+  try {
+    // Get snapshot as blob, upload to VLM detect
+    const snapResp = await fetch(VLP + '/ptz/snapshot');
+    const blob = await snapResp.blob();
+    const form = new FormData();
+    form.append('file', blob, 'snapshot.jpg');
+    const r = await fetch('/api/vlp/detect', {method:'POST', body: form});
+    // vlp doesn't have file upload proxy, use direct vlm-patrol
+    // Fallback: use agent analyze
+    const result = await fetch(VLP + '/agent/analyze', {method:'POST'});
+    const data = await result.json();
+    content.textContent = `健康: ${data.health_score}/100\n${data.summary || ''}\n\n植物数: ${(data.plants||[]).length}`;
+    vlpRefresh();
+  } catch(e) {
+    content.textContent = '检测失败: ' + e.message;
+  }
+}
+
+async function vlpAnalyze() {
+  const panel = document.getElementById('vlp-detect-result');
+  const content = document.getElementById('vlp-detect-content');
+  panel.classList.remove('hidden');
+  content.textContent = '分析诊断中...';
+  try {
+    const r = await fetch(VLP + '/agent/analyze', {method:'POST'});
+    const data = await r.json();
+    let text = `健康评分: ${data.health_score}/100\n${data.summary || ''}`;
+    if (data.commands && data.commands.length) {
+      text += '\n\n建议操作:';
+      data.commands.forEach(c => { text += `\n  ${c.action}: ${c.reason}`; });
+    }
+    content.textContent = text;
+    vlpRefresh();
+  } catch(e) {
+    content.textContent = '分析失败: ' + e.message;
+  }
+}
+
+async function vlpTrain() {
+  if (!confirm('开始训练 YOLO 模型？')) return;
+  try {
+    const r = await fetch(VLP + '/yolo/train', {method:'POST'});
+    const data = await r.json();
+    alert(data.status === 'training_started' ? 'YOLO 训练已启动' : data.status);
+  } catch(e) {
+    alert('训练启动失败: ' + e.message);
+  }
+}
+
+async function vlpPatrolStart() {
+  await fetch(VLP + '/patrol/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  vlpRefresh();
+}
+
+async function vlpPatrolStop() {
+  await fetch(VLP + '/patrol/stop', {method:'POST'});
+  vlpRefresh();
+}
+
+async function vlpTogglePatrol() {
+  // patrol toggle is just a visual indicator for now
+}
+
+async function vlpToggleAnalysis() {
+  const on = document.getElementById('vlp-auto-analysis').checked;
+  if (on) {
+    await fetch(VLP + '/agent/start', {method:'POST'});
+    document.getElementById('vlp-analysis-info').textContent = '运行中...';
+  } else {
+    await fetch(VLP + '/agent/stop', {method:'POST'});
+    document.getElementById('vlp-analysis-info').textContent = '已停止';
+  }
+}
+
+async function vlpToggleCare() {
+  const on = document.getElementById('vlp-auto-care').checked;
+  await fetch(VLP + '/agent/auto-care?enable=' + on, {method:'POST'});
+}
+
+async function vlpSendChat() {
+  const input = document.getElementById('vlp-chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  const box = document.getElementById('vlp-chat-messages');
+  box.innerHTML += `<div class="bubble-user px-3 py-2 text-xs">${text.replace(/</g,'&lt;')}</div>`;
+  box.scrollTop = box.scrollHeight;
+
+  try {
+    const r = await fetch(VLP + '/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    const data = await r.json();
+    const reply = (data.text || data.response || '').replace(/</g,'&lt;').replace(/\n/g,'<br>');
+    box.innerHTML += `<div class="bubble-ai px-3 py-2 text-xs">${reply}</div>`;
+    box.scrollTop = box.scrollHeight;
+    if (data.is_setup) vlpRefresh();
+  } catch(e) {
+    box.innerHTML += `<div class="bubble-ai px-3 py-2 text-xs text-red-400">连接失败: ${e.message}</div>`;
+    box.scrollTop = box.scrollHeight;
+  }
+}
+
+// Auto refresh when local view is active
+setInterval(() => {
+  const localView = document.getElementById('view-local');
+  if (localView && localView.classList.contains('active')) vlpRefresh();
+}, 15000);
+
+
+// ── Boot ────────────────────────────────────────────────────
+refreshDevices();
+refreshRealtime();
+syncControlState();
+connectSSE();
+refreshCamera();
+
+setInterval(refreshDevices, 10000);
+setInterval(refreshCamera,  30000);
+</script>
+</body>
+</html>

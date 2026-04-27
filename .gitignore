@@ -9,3 +9,6 @@ data/
 runs/
 .DS_Store
 *.log
+*.db
+venv/
+patrol_history/

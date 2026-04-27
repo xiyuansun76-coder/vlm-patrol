@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SmartAgri | Precision Vitality</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  body { font-family: 'Inter', sans-serif; background-color: #121413; }
+  .font-headline { font-family: 'Space Grotesk', sans-serif; }
+
+  /* Ambient grid */
+  .grid-overlay {
+    background-image:
+      linear-gradient(rgba(57,255,20,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(57,255,20,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Falling particle streams */
+  .particle-stream {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100px;
+    background: linear-gradient(to bottom, transparent, #39ff14, transparent);
+    filter: blur(1px);
+    opacity: 0;
+    animation: fall linear infinite;
+  }
+  @keyframes fall {
+    0%   { transform: translateY(-100vh) scaleY(0.5); opacity: 0; }
+    50%  { opacity: 0.6; }
+    100% { transform: translateY(100vh) scaleY(1.5); opacity: 0; }
+  }
+
+  /* Scroll reveal */
+  .reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 1s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-on-scroll.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Mask fade on side images */
+  .data-overlay-image {
+    mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  }
+
+  /* Glitch border on login card */
+  .glitch-border { position: relative; }
+  .glitch-border::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(90deg, #39ff14, #00f4fe, #39ff14);
+    z-index: -1;
+    opacity: 0.3;
+    animation: border-flow 4s linear infinite;
+    background-size: 200% 200%;
+    border-radius: inherit;
+  }
+  @keyframes border-flow {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+
+  /* Animated bottom border on inputs */
+  .input-underline {
+    position: absolute; bottom: 0; left: 0;
+    width: 0; height: 2px;
+    background: #00f4fe;
+    transition: width .5s;
+  }
+  .input-group:focus-within .input-underline { width: 100%; }
+  .input-group:focus-within label { color: #39ff14; }
+
+  /* Custom input style */
+  .auth-input {
+    width: 100%;
+    background: rgba(13,15,14,.6);
+    border: none;
+    border-radius: 0.5rem;
+    padding: 16px;
+    font-family: 'SF Mono','Fira Code',monospace;
+    font-size: 13px;
+    color: #e2e3e0;
+    outline: none;
+    transition: background .2s;
+  }
+  .auth-input:focus { background: rgba(13,15,14,.9); }
+  .auth-input::placeholder { color: #3c4b35; }
+
+  /* Orbit spin */
+  @keyframes orbit {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .orbit { animation: orbit 20s linear infinite; }
+
+  /* Scroll indicator bounce */
+  @keyframes bounce-dot {
+    0%,100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(8px); }
+  }
+  .bounce-dot { animation: bounce-dot 1.5s ease-in-out infinite; }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "background":                "#121413",
+          "surface-container-low":     "#1a1c1b",
+          "surface-container":         "#1e201f",
+          "surface-container-high":    "#282a29",
+          "surface-container-highest": "#333534",
+          "surface-container-lowest":  "#0d0f0e",
+          "primary":                   "#efffe3",
+          "primary-fixed":             "#79ff5b",
+          "primary-fixed-dim":         "#2ae500",
+          "primary-container":         "#39ff14",
+          "on-primary":                "#053900",
+          "on-primary-container":      "#107100",
+          "secondary":                 "#e6feff",
+          "secondary-fixed":           "#63f7ff",
+          "secondary-fixed-dim":       "#00dce5",
+          "secondary-container":       "#00f4fe",
+          "on-surface":                "#e2e3e0",
+          "on-surface-variant":        "#baccb0",
+          "outline-variant":           "#3c4b35",
+          "error":                     "#ffb4ab"
+        },
+        borderRadius: {
+          DEFAULT:"0.125rem", lg:"0.25rem", xl:"0.5rem", full:"0.75rem"
+        },
+        fontFamily: {
+          headline:["Space Grotesk","sans-serif"],
+          body:["Inter","sans-serif"],
+          label:["Inter","sans-serif"]
+        }
+      }
+    }
+  }
+</script>
+</head>
+<body class="bg-background text-on-surface selection:bg-primary-container selection:text-on-primary-container overflow-x-hidden">
+
+<!-- ── Ambient Background ─────────────────────────────── -->
+<div class="fixed inset-0 z-0 pointer-events-none" id="particle-container">
+  <div class="absolute inset-0 grid-overlay opacity-20"></div>
+  <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-container/10 blur-[120px] rounded-full"></div>
+  <div class="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary-container/5 blur-[150px] rounded-full"></div>
+</div>
+
+<!-- ── Top Navigation ─────────────────────────────────── -->
+<header class="w-full top-0 sticky z-50 bg-neutral-950/80 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex justify-between items-center px-8 py-4 border-b border-white/5">
+  <div class="text-2xl font-bold tracking-tighter text-lime-400 italic font-headline flex items-center gap-3">
+    <span class="material-symbols-outlined text-3xl" style="font-variation-settings:'FILL' 1;">eco</span>
+    SmartAgri
+  </div>
+  <nav class="hidden md:flex items-center gap-8">
+    <a class="font-headline tracking-tight text-lime-400 border-b-2 border-lime-400 pb-1 text-sm uppercase font-bold" href="#">概览</a>
+    <a class="font-headline tracking-tight text-neutral-400 hover:text-cyan-400 transition-colors text-sm uppercase" href="#">土壤</a>
+    <a class="font-headline tracking-tight text-neutral-400 hover:text-cyan-400 transition-colors text-sm uppercase" href="#">大气</a>
+    <a class="font-headline tracking-tight text-neutral-400 hover:text-cyan-400 transition-colors text-sm uppercase" href="#">历史</a>
+  </nav>
+  <div class="flex items-center gap-6">
+    <button class="text-neutral-400 hover:text-cyan-400 transition-all duration-300">
+      <span class="material-symbols-outlined">notifications</span>
+    </button>
+    <button class="text-neutral-400 hover:text-cyan-400 transition-all duration-300">
+      <span class="material-symbols-outlined">settings</span>
+    </button>
+    <div class="w-8 h-8 rounded-full border border-lime-400/30 bg-surface-container-high flex items-center justify-center ring-2 ring-lime-400/10">
+      <span class="material-symbols-outlined text-sm text-lime-400">person</span>
+    </div>
+  </div>
+</header>
+
+<main class="relative z-10">
+
+  <!-- ── HERO SECTION ───────────────────────────────────── -->
+  <section class="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden pt-20">
+
+    <!-- Side background panels -->
+    <div class="absolute inset-0 flex justify-between items-center px-0 pointer-events-none opacity-40">
+      <!-- Left: greenhouse glow -->
+      <div class="w-1/3 h-full relative data-overlay-image">
+        <div class="w-full h-full" style="background:radial-gradient(ellipse at 60% 40%, rgba(57,255,20,.18) 0%, rgba(57,255,20,.04) 50%, transparent 100%)"></div>
+        <div class="absolute inset-0 bg-gradient-to-r from-background via-transparent to-transparent"></div>
+      </div>
+      <!-- Right: data cyan glow -->
+      <div class="w-1/3 h-full relative data-overlay-image">
+        <div class="w-full h-full" style="background:radial-gradient(ellipse at 40% 50%, rgba(0,244,254,.12) 0%, rgba(0,244,254,.03) 50%, transparent 100%)"></div>
+        <div class="absolute inset-0 bg-gradient-to-l from-background via-transparent to-transparent"></div>
+      </div>
+    </div>
+
+    <!-- Central content -->
+    <div class="flex flex-col items-center gap-12 max-w-4xl w-full text-center relative z-20">
+
+      <!-- Logo hub -->
+      <div class="relative group">
+        <div class="absolute inset-0 bg-primary-container/20 blur-3xl rounded-full scale-150 animate-pulse"></div>
+        <div class="relative w-48 h-48 md:w-64 md:h-64 flex items-center justify-center border border-primary-container/30 rounded-full backdrop-blur-md">
+          <span class="material-symbols-outlined text-primary-container drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]"
+                style="font-size:100px;font-variation-settings:'FILL' 1;">
+            heap_snapshot_thumbnail
+          </span>
+          <!-- Orbiting dashed ring -->
+          <div class="absolute inset-0 border-2 border-dashed border-secondary-container/40 rounded-full orbit"></div>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <h1 class="font-headline text-5xl md:text-8xl font-bold tracking-tighter text-on-surface">
+          Smart <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary-container to-secondary-container italic" style="padding-right:0.15em">Agrimind</span>
+        </h1>
+        <p class="max-w-xl mx-auto text-on-surface-variant font-light leading-relaxed text-lg">
+          智慧温室的生物数字神经元。实时传感器遥测、设备自动控制与土壤智能监测。
+        </p>
+      </div>
+
+      <!-- Scroll indicator -->
+      <div class="mt-12 flex flex-col items-center gap-4 group cursor-pointer"
+           onclick="document.getElementById('login-section').scrollIntoView({behavior:'smooth'})">
+        <span class="font-headline text-xs tracking-widest text-primary uppercase font-bold group-hover:text-secondary-container transition-colors">
+          接入神经链路
+        </span>
+        <div class="w-[1px] h-24 bg-gradient-to-b from-primary-container via-secondary-container to-transparent relative">
+          <div class="absolute top-0 left-1/2 w-1.5 h-1.5 bg-primary-container rounded-full bounce-dot"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── LOGIN SECTION ──────────────────────────────────── -->
+  <section class="py-32 px-6 flex items-center justify-center min-h-screen relative" id="login-section">
+
+    <div class="w-full max-w-md bg-surface-container-highest/40 backdrop-blur-2xl p-10 rounded-xl shadow-2xl relative overflow-hidden reveal-on-scroll glitch-border">
+
+      <!-- Circuit leaf SVG corner -->
+      <div class="absolute top-0 right-0 p-4 opacity-20 pointer-events-none">
+        <svg fill="none" height="60" viewBox="0 0 60 60" width="60" xmlns="http://www.w3.org/2000/svg">
+          <path d="M60 0V40C60 51.0457 51.0457 60 40 60H0" stroke="#39FF14" stroke-width="0.5"></path>
+        </svg>
+      </div>
+
+      <!-- Card header -->
+      <div class="mb-10 text-center">
+        <h2 class="font-headline text-3xl font-bold tracking-tight text-secondary-fixed-dim mb-2 uppercase">System Alpha 接入</h2>
+        <p class="text-sm text-on-surface-variant">输入操作员凭证以继续。</p>
+      </div>
+
+      <!-- Login form -->
+      <form class="space-y-6" method="post" action="/login" id="login-form">
+
+        <!-- Username -->
+        <div class="space-y-2 input-group relative">
+          <label class="text-[10px] font-headline uppercase tracking-widest text-secondary font-bold transition-colors">
+            操作员 ID / 用户名
+          </label>
+          <div class="relative">
+            <input
+              class="auth-input"
+              name="username"
+              type="text"
+              placeholder="OPERATOR_ID"
+              autocomplete="username"
+              required
+            />
+            <div class="input-underline"></div>
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="space-y-2 input-group relative">
+          <label class="text-[10px] font-headline uppercase tracking-widest text-secondary font-bold transition-colors">
+            访问协议 / 密码
+          </label>
+          <div class="relative">
+            <input
+              class="auth-input"
+              name="password"
+              type="password"
+              id="pw-input"
+              placeholder="••••••••••••"
+              autocomplete="current-password"
+              required
+              style="padding-right:44px"
+            />
+            <div class="input-underline"></div>
+            <button type="button" onclick="togglePw()"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-secondary-container transition-colors"
+                    aria-label="显示/隐藏密码">
+              <span class="material-symbols-outlined text-lg" id="pw-icon">visibility_off</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Options row -->
+        <div class="flex items-center justify-between text-xs font-headline">
+          <label class="flex items-center gap-2 cursor-pointer text-on-surface-variant hover:text-primary transition-colors">
+            <input class="w-4 h-4 rounded border-outline-variant bg-surface-container focus:ring-0 checked:bg-primary-container" type="checkbox"/>
+            保持会话活跃
+          </label>
+          <span class="text-secondary-fixed-dim text-xs font-headline">v2.0 · SmartAgri</span>
+        </div>
+
+        <!-- Error placeholder (server injects here on failure) -->
+        <!--ERROR_PLACEHOLDER-->
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          id="submit-btn"
+          class="w-full bg-primary-container text-on-primary-container font-headline font-bold py-4 rounded-lg flex items-center justify-center gap-3 hover:shadow-[0_0_20px_rgba(57,255,20,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-300 uppercase tracking-widest text-sm"
+        >
+          启动连接
+          <span class="material-symbols-outlined text-lg">arrow_forward</span>
+        </button>
+      </form>
+
+      <!-- Secondary options -->
+      <div class="mt-8 pt-8 border-t border-outline-variant/10 flex items-center justify-center gap-4">
+        <span class="text-xs text-on-surface-variant font-headline uppercase">其他验证方式</span>
+        <button class="w-10 h-10 rounded-full bg-surface-container-low border border-outline-variant/20 flex items-center justify-center hover:bg-surface-container-high transition-colors">
+          <span class="material-symbols-outlined text-sm">fingerprint</span>
+        </button>
+        <button class="w-10 h-10 rounded-full bg-surface-container-low border border-outline-variant/20 flex items-center justify-center hover:bg-surface-container-high transition-colors">
+          <span class="material-symbols-outlined text-sm">token</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Fixed Side Nav ─────────────────────────────────── -->
+<aside class="fixed top-1/2 -translate-y-1/2 left-0 h-[500px] w-1 hover:w-56 bg-neutral-900/40 backdrop-blur-2xl transition-all duration-500 overflow-hidden z-50 border-r border-white/5 shadow-2xl flex flex-col py-6 group">
+  <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-300 px-6 mb-10">
+    <h4 class="font-headline text-[10px] uppercase tracking-[0.3em] text-primary mb-1">System Alpha</h4>
+    <div class="text-[9px] text-on-surface-variant font-mono">状态: <span class="text-primary-fixed">待机</span></div>
+  </div>
+  <nav class="flex flex-col gap-2">
+    <a class="flex items-center gap-6 px-6 py-4 text-lime-400 bg-lime-400/10 border-r-4 border-lime-400 transition-all" href="#">
+      <span class="material-symbols-outlined">grid_view</span>
+      <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">概览</span>
+    </a>
+    <a class="flex items-center gap-6 px-6 py-4 text-neutral-500 hover:text-cyan-300 transition-all hover:bg-white/5" href="#">
+      <span class="material-symbols-outlined">grass</span>
+      <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">土壤</span>
+    </a>
+    <a class="flex items-center gap-6 px-6 py-4 text-neutral-500 hover:text-cyan-300 transition-all hover:bg-white/5" href="#">
+      <span class="material-symbols-outlined">air</span>
+      <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">大气</span>
+    </a>
+    <a class="flex items-center gap-6 px-6 py-4 text-neutral-500 hover:text-cyan-300 transition-all hover:bg-white/5" href="#">
+      <span class="material-symbols-outlined">analytics</span>
+      <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">报告</span>
+    </a>
+  </nav>
+  <div class="mt-auto px-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+    <div class="flex flex-col gap-3">
+      <a class="flex items-center gap-4 text-neutral-500 hover:text-primary transition-colors" href="#">
+        <span class="material-symbols-outlined text-sm">help</span>
+        <span class="font-headline uppercase text-[9px] tracking-widest">支持</span>
+      </a>
+      <a class="flex items-center gap-4 text-neutral-500 hover:text-primary transition-colors" href="#">
+        <span class="material-symbols-outlined text-sm">terminal</span>
+        <span class="font-headline uppercase text-[9px] tracking-widest">日志</span>
+      </a>
+    </div>
+  </div>
+</aside>
+
+<!-- ── Footer ─────────────────────────────────────────── -->
+<footer class="py-16 px-6 border-t border-outline-variant/10 relative z-10">
+  <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+    <div class="flex items-center gap-3 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer">
+      <span class="material-symbols-outlined text-2xl text-lime-400" style="font-variation-settings:'FILL' 1;">eco</span>
+      <span class="font-headline font-bold text-xl tracking-tighter uppercase text-on-surface">SmartAgri</span>
+    </div>
+    <div class="flex gap-12 text-[10px] font-headline uppercase tracking-widest font-bold">
+      <a class="text-on-surface-variant hover:text-primary transition-colors" href="#">协议</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors" href="#">数据资产</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors" href="#">隐私</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors" href="#">状态</a>
+    </div>
+    <div class="text-xs font-mono text-neutral-600">
+      © 2024 SMARTAGRI_OS // v2.0.0-STABLE
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ── Particle streams ────────────────────────────────────
+  const container = document.getElementById('particle-container');
+  for (let i = 0; i < 50; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle-stream';
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.animationDuration = (Math.random() * 3 + 2) + 's';
+    p.style.animationDelay = Math.random() * 5 + 's';
+    p.style.opacity = String(Math.random() * 0.5);
+    container.appendChild(p);
+  }
+
+  // ── Scroll reveal ───────────────────────────────────────
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('active');
+        // Intensify particles on login section
+        if (entry.target.closest('#login-section')) {
+          document.querySelectorAll('.particle-stream').forEach(p => {
+            p.style.animationDuration = '1.5s';
+            p.style.opacity = '0.8';
+          });
+        }
+      }
+    });
+  }, { threshold: 0.2 });
+  document.querySelectorAll('.reveal-on-scroll').forEach(el => observer.observe(el));
+
+  // Particle density on scroll
+  window.addEventListener('scroll', () => {
+    const opacity = Math.min(window.scrollY / 500, 1);
+    document.querySelectorAll('.particle-stream').forEach(p => {
+      p.style.opacity = String(opacity * (Math.random() * 0.5 + 0.3));
+    });
+  });
+
+  // ── Password toggle ──────────────────────────────────────
+  function togglePw() {
+    const inp  = document.getElementById('pw-input');
+    const icon = document.getElementById('pw-icon');
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      icon.textContent = 'visibility';
+    } else {
+      inp.type = 'password';
+      icon.textContent = 'visibility_off';
+    }
+  }
+
+  // ── Submit loading state ─────────────────────────────────
+  document.getElementById('login-form').addEventListener('submit', () => {
+    const btn = document.getElementById('submit-btn');
+    btn.innerHTML = '验证中... <span class="material-symbols-outlined text-lg animate-spin">autorenew</span>';
+    btn.disabled = true;
+    btn.style.opacity = '.75';
+  });
+
+  // ── Auto-scroll to login on error ───────────────────────
+  if (document.getElementById('login-err')) {
+    document.getElementById('login-section').scrollIntoView({ behavior: 'instant' });
+    document.querySelector('.reveal-on-scroll').classList.add('active');
+  }
+</script>
+</body>
+</html>
