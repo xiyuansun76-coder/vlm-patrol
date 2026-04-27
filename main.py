@@ -635,6 +635,7 @@ def _save_config_to_yaml():
             "stream_url": cfg.camera_stream_url,
             "ptz": {
                 "enabled": cfg.ptz_enabled, "url": cfg.ptz_url,
+                "user": cfg.ptz_user, "pass": cfg.ptz_pass,
                 "fov_h_deg": cfg.ptz_fov_h, "fov_v_deg": cfg.ptz_fov_v,
                 "image_width": cfg.ptz_img_w, "image_height": cfg.ptz_img_h,
                 "home_az": cfg.ptz_home_az, "home_el": cfg.ptz_home_el,
@@ -706,6 +707,8 @@ async def get_config():
         },
         "ptz_enabled": cfg.ptz_enabled,
         "ptz_url": cfg.ptz_url,
+        "ptz_user": cfg.ptz_user,
+        "ptz_pass": cfg.ptz_pass,
         "ptz_img_w": cfg.ptz_img_w,
         "ptz_img_h": cfg.ptz_img_h,
         "ptz_fov_h": cfg.ptz_fov_h,
