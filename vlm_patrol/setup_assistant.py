@@ -333,9 +333,10 @@ def _keyword_detect_intent(message: str) -> dict:
 # Test functions
 # ═══════════════════════════════════════════════════════════
 
-async def test_camera(url: str) -> dict:
+async def test_camera(url: str, user: str = "", pwd: str = "") -> dict:
     try:
-        async with httpx.AsyncClient(timeout=8) as c:
+        auth = httpx.DigestAuth(user, pwd) if user else None
+        async with httpx.AsyncClient(timeout=8, auth=auth) as c:
             r = await c.get(url)
             if r.status_code == 200 and len(r.content) > 1000:
                 content_type = r.headers.get("content-type", "")
@@ -423,7 +424,7 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
             status_parts.append(f"❌ LLM not connected: {llm_result['error']}\n   → Tell me your LLM API URL to configure it")
 
         if cfg.camera_snapshot_url:
-            cam_result = await test_camera(cfg.camera_snapshot_url)
+            cam_result = await test_camera(cfg.camera_snapshot_url, cfg.ptz_user, cfg.ptz_pass)
             if cam_result["ok"]:
                 status_parts.append(f"✅ Camera connected: {cfg.camera_snapshot_url} ({cam_result['size']} bytes)")
             else:
@@ -469,7 +470,7 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
             for path in ["/snapshot", "/capture", "/ISAPI/Streaming/channels/101/picture",
                          "/cgi-bin/snapshot.cgi", "/jpg/image.jpg"]:
                 test_url = f"http://{ip}{path}"
-                cam_result = await test_camera(test_url)
+                cam_result = await test_camera(test_url, cfg.ptz_user, cfg.ptz_pass)
                 if cam_result["ok"]:
                     cfg.camera_snapshot_url = test_url
                     save_config_fn()
@@ -482,7 +483,7 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
                     f"   Please provide the full snapshot URL.")
 
         if url:
-            cam_result = await test_camera(url)
+            cam_result = await test_camera(url, cfg.ptz_user, cfg.ptz_pass)
             if cam_result["ok"]:
                 cfg.camera_snapshot_url = url
                 save_config_fn()
@@ -491,7 +492,7 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
                 return f"❌ Camera URL not responding: {cam_result['error']}"
 
         if cfg.camera_snapshot_url:
-            cam_result = await test_camera(cfg.camera_snapshot_url)
+            cam_result = await test_camera(cfg.camera_snapshot_url, cfg.ptz_user, cfg.ptz_pass)
             status = "connected" if cam_result["ok"] else f"error: {cam_result['error']}"
             return (f"📷 Current camera: {cfg.camera_snapshot_url} ({status})\n"
                     f"   PTZ: {'enabled' if cfg.ptz_enabled else 'disabled'}\n\n"
