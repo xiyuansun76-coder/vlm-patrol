@@ -103,7 +103,7 @@
         <button onclick="setView('soil')"     class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">土壤</button>
         <button onclick="setView('atm')"      class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">大气</button>
         <button onclick="setView('history')"  class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">历史</button>
-        <button onclick="setView('camera')"   class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">摄像头</button>
+        <button onclick="setView('camera')"   class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">设置</button>
         <button onclick="setView('livecam')"  class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">实时监控</button>
         <button onclick="setView('patrol')"   class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">智能巡检</button>
         <button onclick="setView('local')"    class="nav-tab text-neutral-400 hover:text-cyan-400 transition-colors text-sm">本地服务</button>
@@ -157,8 +157,8 @@
           <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">历史</span>
         </button>
         <button onclick="setView('camera')" data-view="camera" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
-          <span class="material-symbols-outlined shrink-0" style="font-size:20px">photo_library</span>
-          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">摄像头</span>
+          <span class="material-symbols-outlined shrink-0" style="font-size:20px">settings</span>
+          <span class="font-headline uppercase text-xs tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">设置</span>
         </button>
         <button onclick="setView('livecam')" data-view="livecam" class="nav-item text-neutral-500 hover:text-cyan-300 hover:bg-cyan-400/5 flex items-center gap-4 py-3 px-3 rounded-xl transition-all cursor-pointer w-full text-left">
           <span class="material-symbols-outlined shrink-0" style="font-size:20px">videocam</span>
@@ -455,17 +455,153 @@
       </div>
     </div><!-- /view-history -->
 
-    <!-- ════════════════════ VIEW: 摄像头 ════════════════════ -->
-    <div id="view-camera" class="view-section space-y-6">
-      <div class="flex justify-between items-center">
-        <div class="font-headline text-[10px] tracking-[0.3em] text-neutral-500 uppercase">最新照片（最多6张）</div>
-        <button onclick="capture().then(()=>setTimeout(loadCameraGallery,14000))" class="flex items-center gap-2 bg-surface-container-high/40 border border-secondary-container/30 rounded-xl px-4 py-2 text-secondary-container hover:bg-secondary-container/10 transition-all">
-          <span class="material-symbols-outlined" style="font-size:16px">photo_camera</span>
-          <span class="font-headline text-[10px] font-bold uppercase tracking-widest">拍照</span>
-        </button>
+    <!-- ════════════════════ VIEW: 设置 ════════════════════ -->
+    <div id="view-camera" class="view-section space-y-5">
+      <!-- Header -->
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+          <span class="material-symbols-outlined text-cyan-400" style="font-size:16px;font-variation-settings:'FILL' 1">settings</span>
+        </div>
+        <div>
+          <div class="font-headline font-bold text-sm tracking-tight">系统设置</div>
+          <div class="text-[10px] text-neutral-500 font-mono">配置所有外部接口，保存后即时生效</div>
+        </div>
+        <span id="settings-save-status" class="ml-auto text-[10px] text-neutral-600 font-mono"></span>
       </div>
-      <div id="camera-gallery" class="grid grid-cols-3 gap-4"></div>
-    </div><!-- /view-camera -->
+
+      <div class="space-y-4">
+
+        <!-- ── LLM / VLM ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-purple-400" style="font-size:16px">psychology</span>
+            <span class="font-headline font-bold text-xs tracking-tight">大模型 (LLM / VLM)</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">API URL</label>
+              <input id="s-llm-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-purple-500 outline-none" placeholder="http://server:11434/v1/chat/completions"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Model Name</label>
+              <input id="s-llm-model" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-purple-500 outline-none" placeholder="qwen3-vl:8b"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">API Key</label>
+              <input id="s-llm-key" type="password" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-purple-500 outline-none" placeholder="留空 = 无需认证"></div>
+          </div>
+        </div>
+
+        <!-- ── Camera ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-cyan-400" style="font-size:16px">videocam</span>
+            <span class="font-headline font-bold text-xs tracking-tight">摄像头</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Snapshot URL</label>
+              <input id="s-cam-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="http://camera-ip/ISAPI/Streaming/channels/101/picture"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Stream URL (RTSP)</label>
+              <input id="s-cam-stream" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-cyan-500 outline-none" placeholder="rtsp://user:pass@camera-ip/Streaming/channels/101"></div>
+          </div>
+        </div>
+
+        <!-- ── PTZ ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-lime-400" style="font-size:16px">control_camera</span>
+            <span class="font-headline font-bold text-xs tracking-tight">PTZ 云台</span>
+          </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">PTZ Base URL</label>
+              <input id="s-ptz-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-lime-500 outline-none" placeholder="http://camera-ip"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">用户名</label>
+              <input id="s-ptz-user" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-lime-500 outline-none" placeholder="admin"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">密码</label>
+              <input id="s-ptz-pass" type="password" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-lime-500 outline-none"></div>
+            <div class="flex items-end"><label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="s-ptz-on" class="sr-only peer">
+              <div class="w-9 h-5 bg-neutral-700 rounded-full peer-checked:bg-lime-500/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+              <span class="ml-2 text-[10px] text-neutral-400">启用 PTZ</span></label></div>
+          </div>
+        </div>
+
+        <!-- ── Sensors ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-yellow-400" style="font-size:16px">sensors</span>
+            <span class="font-headline font-bold text-xs tracking-tight">传感器</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Sensor Data URL (HTTP Pull)</label>
+              <input id="s-sensor-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="http://sensor-server/api/latest"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">MQTT Broker</label>
+              <input id="s-mqtt-broker" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-yellow-500 outline-none" placeholder="mqtt://broker-ip:1883"></div>
+          </div>
+          <div class="text-[10px] text-neutral-600 mt-2 font-mono">也可通过 POST /api/sensor/push 或 WebSocket 推送数据</div>
+        </div>
+
+        <!-- ── Actuator ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-orange-400" style="font-size:16px">water_drop</span>
+            <span class="font-headline font-bold text-xs tracking-tight">执行器 (浇水 / 通风)</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Actuator Control URL</label>
+              <input id="s-actuator-url" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-orange-500 outline-none" placeholder="http://actuator-server/control"></div>
+            <div class="text-[10px] text-neutral-600 flex items-end font-mono pb-2">Agent 发送 POST {"action":"water","enable":true,"duration_sec":300}</div>
+          </div>
+        </div>
+
+        <!-- ── YOLO ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-red-400" style="font-size:16px">model_training</span>
+            <span class="font-headline font-bold text-xs tracking-tight">YOLO 检测模型</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Model Path</label>
+              <input id="s-yolo-model" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-red-500 outline-none" placeholder="yolo11s.pt (default)"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Data Directory</label>
+              <input id="s-yolo-datadir" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-red-500 outline-none" placeholder="data/yolo"></div>
+            <div class="flex items-end gap-3">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="s-yolo-autotrain" class="sr-only peer">
+                <div class="w-9 h-5 bg-neutral-700 rounded-full peer-checked:bg-red-500/50 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                <span class="ml-2 text-[10px] text-neutral-400">自动训练</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Patrol Strategy ── -->
+        <div class="bg-surface-container-high/20 border border-outline-variant/10 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-teal-400" style="font-size:16px">radar</span>
+            <span class="font-headline font-bold text-xs tracking-tight">巡检策略</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">策略</label>
+              <select id="s-patrol-strategy" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-teal-500 outline-none">
+                <option value="single">single — 单次拍照</option>
+                <option value="sweep">sweep — PTZ 网格扫描</option>
+                <option value="vlm_active">vlm_active — 全景 → 聚焦 → 诊断</option>
+              </select></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">巡检间隔 (分钟)</label>
+              <input id="s-patrol-interval" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-teal-500 outline-none" value="30"></div>
+            <div><label class="text-[10px] text-neutral-500 mb-1 block">Agent 分析间隔 (分钟)</label>
+              <input id="s-agent-interval" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-teal-500 outline-none" value="60"></div>
+          </div>
+        </div>
+
+        <!-- ── Save Button ── -->
+        <div class="flex items-center gap-4">
+          <button onclick="saveAllSettings()" class="px-8 py-2.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all text-xs font-headline uppercase tracking-widest">
+            <span class="material-symbols-outlined align-middle mr-1" style="font-size:14px">save</span>保存所有设置
+          </button>
+          <button onclick="testAllConnections()" class="px-6 py-2.5 rounded-lg bg-lime-500/10 border border-lime-500/30 text-lime-400 hover:bg-lime-500/20 transition-all text-xs font-headline uppercase tracking-widest">
+            <span class="material-symbols-outlined align-middle mr-1" style="font-size:14px">network_check</span>测试连接
+          </button>
+          <span id="settings-msg" class="text-[10px] font-mono"></span>
+        </div>
+
+      </div>
+    </div><!-- /view-camera (settings) -->
 
     <!-- ════════════════════ VIEW: 实时监控 ════════════════════ -->
     <div id="view-livecam" class="view-section space-y-4">
@@ -1883,49 +2019,93 @@ const VLP = '/api';
 // ── Settings load/save ──
 function vlpLoadSettings(cfg) {
   if (!cfg) return;
-  const s = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+  const s = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+  // Main settings page (view-camera)
+  s('s-llm-url', cfg.llm?.url);
+  s('s-llm-model', cfg.llm?.model);
+  s('s-cam-url', cfg.camera?.snapshot_url);
+  s('s-cam-stream', cfg.camera?.stream_url);
+  s('s-ptz-url', cfg.ptz_url);
+  s('s-sensor-url', cfg.sensor_url);
+  s('s-actuator-url', cfg.actuator_url);
+  s('s-yolo-model', cfg.yolo?.model_path);
+  s('s-yolo-datadir', cfg.yolo?.data_dir);
+  const ptzOn = document.getElementById('s-ptz-on');
+  if (ptzOn) ptzOn.checked = cfg.ptz_enabled || false;
+  const autoTrain = document.getElementById('s-yolo-autotrain');
+  if (autoTrain) autoTrain.checked = cfg.yolo?.auto_train || false;
+  const strat = document.getElementById('s-patrol-strategy');
+  if (strat && cfg.patrol?.strategy) strat.value = cfg.patrol.strategy;
+  s('s-patrol-interval', cfg.patrol?.interval);
+  s('s-agent-interval', cfg.agent?.interval);
+  // Also fill the old vlp-s- IDs if they exist (local service panel)
   s('vlp-s-llm-url', cfg.llm?.url);
   s('vlp-s-llm-model', cfg.llm?.model);
   s('vlp-s-cam-url', cfg.camera?.snapshot_url);
   s('vlp-s-cam-stream', cfg.camera?.stream_url);
   s('vlp-s-ptz-url', cfg.ptz_url);
-  const ptzOn = document.getElementById('vlp-s-ptz-on');
-  if (ptzOn) ptzOn.checked = cfg.ptz_enabled || false;
-  const strat = document.getElementById('vlp-s-patrol-strategy');
-  if (strat && cfg.patrol?.strategy) strat.value = cfg.patrol.strategy;
+  const ptzOn2 = document.getElementById('vlp-s-ptz-on');
+  if (ptzOn2) ptzOn2.checked = cfg.ptz_enabled || false;
+  const strat2 = document.getElementById('vlp-s-patrol-strategy');
+  if (strat2 && cfg.patrol?.strategy) strat2.value = cfg.patrol.strategy;
   s('vlp-s-patrol-interval', cfg.patrol?.interval);
   s('vlp-s-agent-interval', cfg.agent?.interval);
 }
 
-async function vlpSaveSettings() {
+async function saveAllSettings() {
   const g = id => document.getElementById(id)?.value || '';
   const data = {
-    llm: { url: g('vlp-s-llm-url'), model: g('vlp-s-llm-model'), api_key: g('vlp-s-llm-key') },
-    camera: { snapshot_url: g('vlp-s-cam-url'), stream_url: g('vlp-s-cam-stream') },
-    ptz: { url: g('vlp-s-ptz-url'), user: g('vlp-s-ptz-user'), pass: g('vlp-s-ptz-pass'),
-           enabled: document.getElementById('vlp-s-ptz-on')?.checked || false },
-    patrol: { strategy: g('vlp-s-patrol-strategy'),
-              interval_minutes: parseInt(g('vlp-s-patrol-interval')) || 30 },
-    agent: { interval_minutes: parseInt(g('vlp-s-agent-interval')) || 60 },
+    llm: { url: g('s-llm-url'), model: g('s-llm-model'), api_key: g('s-llm-key') },
+    camera: { snapshot_url: g('s-cam-url'), stream_url: g('s-cam-stream') },
+    ptz: { url: g('s-ptz-url'), user: g('s-ptz-user'), pass: g('s-ptz-pass'),
+           enabled: document.getElementById('s-ptz-on')?.checked || false },
+    sensor: { url: g('s-sensor-url') },
+    actuator: { url: g('s-actuator-url') },
+    yolo: { model_path: g('s-yolo-model'), data_dir: g('s-yolo-datadir'),
+            auto_train: document.getElementById('s-yolo-autotrain')?.checked || false },
+    patrol: { strategy: g('s-patrol-strategy'),
+              interval_minutes: parseInt(g('s-patrol-interval')) || 30 },
+    agent: { interval_minutes: parseInt(g('s-agent-interval')) || 60 },
   };
-  const status = document.getElementById('vlp-settings-status');
+  const msg = document.getElementById('settings-msg');
   try {
     const r = await fetch(VLP+'/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     const j = await r.json();
     if (j.status === 'ok') {
-      status.textContent = '\u2705 \u5df2\u4fdd\u5b58';
-      status.className = 'text-[10px] text-lime-400 font-mono';
+      msg.textContent = '\u2705 \u5df2\u4fdd\u5b58';
+      msg.className = 'text-[10px] text-lime-400 font-mono';
       vlpRefresh();
     } else {
-      status.textContent = '\u274c ' + (j.error || 'failed');
-      status.className = 'text-[10px] text-red-400 font-mono';
+      msg.textContent = '\u274c ' + (j.error || 'failed');
+      msg.className = 'text-[10px] text-red-400 font-mono';
     }
   } catch(e) {
-    status.textContent = '\u274c \u8fde\u63a5\u5931\u8d25';
-    status.className = 'text-[10px] text-red-400 font-mono';
+    msg.textContent = '\u274c \u8fde\u63a5\u5931\u8d25';
+    msg.className = 'text-[10px] text-red-400 font-mono';
   }
-  setTimeout(() => { status.textContent = ''; }, 3000);
+  setTimeout(() => { msg.textContent = ''; }, 3000);
 }
+
+async function testAllConnections() {
+  const msg = document.getElementById('settings-msg');
+  msg.textContent = '\u26a1 \u6d4b\u8bd5\u4e2d...';
+  msg.className = 'text-[10px] text-cyan-400 font-mono';
+  try {
+    // Use the setup assistant's status check
+    const r = await fetch(VLP+'/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:'status'})});
+    const j = await r.json();
+    msg.textContent = '';
+    // Show result in an alert or inline
+    const text = j.text || j.response || JSON.stringify(j);
+    alert(text);
+  } catch(e) {
+    msg.textContent = '\u274c ' + e.message;
+    msg.className = 'text-[10px] text-red-400 font-mono';
+  }
+}
+
+// Keep old function name as alias
+async function vlpSaveSettings() { return saveAllSettings(); }
 
 async function vlpRefresh() {
   try {
