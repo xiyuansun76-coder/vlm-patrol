@@ -11,21 +11,18 @@ log = logging.getLogger(__name__)
 
 def _extract_json_array(text: str) -> list:
     """Extract JSON array from LLM response."""
-    # try ```json [...] ```
     m = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', text, re.DOTALL)
     if m:
         try:
             return json.loads(m.group(1))
         except Exception:
             pass
-    # try bare [...]
     m = re.search(r'\[.*\]', text, re.DOTALL)
     if m:
         try:
             return json.loads(m.group(0))
         except Exception:
             pass
-    # try single {...}
     m = re.search(r'\{.*\}', text, re.DOTALL)
     if m:
         try:
@@ -103,12 +100,13 @@ class VLM:
         species_list = ", ".join(self.cfg.classes)
 
         prompt = (
-            f"Detect every plant in this greenhouse image. "
-            f"The possible species are: {species_list}. "
-            f"For each plant, output bbox_2d as [x1, y1, x2, y2] in pixel coordinates "
-            f"(image is {img_w}x{img_h}), the species name, and health status "
-            f"(healthy, mild_stress, stressed, severe_stress). "
-            f"Output as a JSON array. Only output JSON, no other text."
+            f"Detect and locate every plant in this image. "
+            f"The possible plant species are: {species_list}. "
+            f"For each plant found, output a JSON array. Each element must have "
+            f'"bbox_2d" (normalized 0-1000 coordinates [x1,y1,x2,y2]) and '
+            f'"label" (the species name from the list above), and '
+            f'"health" (healthy, mild_stress, stressed, severe_stress). '
+            f"Output ONLY the JSON array, no other text."
         )
 
         msg = self._make_image_message(prompt, b64)
@@ -121,7 +119,9 @@ class VLM:
         return self._parse_grounding(result, img_w, img_h)
 
     def _parse_grounding(self, text: str, img_w: int, img_h: int) -> list[dict]:
-        """Parse grounding output into standardized results."""
+        """Parse grounding output into standardized results.
+        Model outputs normalized 0-1000 coords, convert to pixel coords.
+        """
         items = _extract_json_array(text)
         plants = []
         for item in items:
@@ -141,9 +141,20 @@ class VLM:
                 continue
 
             try:
-                x1, y1, x2, y2 = [int(float(v)) for v in bbox]
+                raw = [float(v) for v in bbox]
             except (ValueError, TypeError):
                 continue
+
+            # Detect coordinate system: if all values <= 1000, treat as normalized 0-1000
+            # and convert to pixel coordinates
+            if all(v <= 1000 for v in raw):
+                x1 = int(raw[0] / 1000 * img_w)
+                y1 = int(raw[1] / 1000 * img_h)
+                x2 = int(raw[2] / 1000 * img_w)
+                y2 = int(raw[3] / 1000 * img_h)
+            else:
+                # Already pixel coordinates
+                x1, y1, x2, y2 = [int(v) for v in raw]
 
             # clamp
             x1 = max(0, min(img_w, x1))
@@ -173,8 +184,6 @@ class VLM:
     async def diagnose(self, image_bytes: bytes, sensor_data: dict = None) -> dict:
         """
         Close-up diagnosis: identify species, health, and give advice.
-        Returns: {"is_plant": bool, "type": str, "health": str, "details": str,
-                  "confidence": float, "bbox": [x1,y1,x2,y2] or None}
         """
         b64 = base64.b64encode(image_bytes).decode()
 
@@ -189,7 +198,7 @@ class VLM:
         prompt = (
             f"Analyze this close-up plant image. "
             f"The possible species are: {species_list}. "
-            f"Output bbox_2d as [x1, y1, x2, y2] in pixel coordinates for the main plant. "
+            f"Output bbox_2d as normalized 0-1000 coordinates [x1, y1, x2, y2] for the main plant. "
             f"Identify the species, health status "
             f"(healthy/mild_stress/stressed/severe_stress), "
             f"confidence (0.0-1.0), and a brief description of visual symptoms if any."

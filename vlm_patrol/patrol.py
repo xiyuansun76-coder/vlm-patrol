@@ -1,7 +1,6 @@
-"""Patrol core — supports 3 strategies depending on hardware:
-  - single:     one snapshot (no PTZ needed)
-  - sweep:      PTZ grid scan, VLM detect at each position
+"""Patrol core — VLM-driven active perception:
   - vlm_active: panorama → VLM grounding → PTZ focus each plant → close-up diagnose
+  - annotation: use pre-annotated plant positions → PTZ focus → diagnose
 """
 
 import asyncio
@@ -46,7 +45,7 @@ class PlantRecord:
 class PatrolSession:
     session_id: str = ""
     status: str = "idle"
-    strategy: str = "single"
+    strategy: str = "vlm_active"
     started_at: str = ""
     plants: list = field(default_factory=list)
     errors: list = field(default_factory=list)
@@ -65,7 +64,7 @@ class PatrolSession:
 
 
 class Patrol:
-    """Patrol controller with 3 strategies."""
+    """Patrol controller: VLM active perception + annotation-based."""
 
     def __init__(self, config, vlm, yolo_mgr, ptz=None):
         self.cfg = config
@@ -125,75 +124,14 @@ class Patrol:
             session.images_collected += 1
             log.info("Collected %s → %s (%d labels)", fname, split, len(labels))
 
-    # ── Strategy: single (no PTZ) ──
-
-    async def _run_single(self, session: PatrolSession, sensor_data: dict = None):
-        """One snapshot → VLM detect → collect."""
-        image = await self.snapshot()
-        if not image:
-            session.errors.append("Failed to get camera image")
-            return
-
-        img_w = self.cfg.ptz_img_w if self.cfg.ptz_enabled else 1920
-        img_h = self.cfg.ptz_img_h if self.cfg.ptz_enabled else 1080
-
-        plants = await self.vlm.grounding_detect(image, img_w, img_h)
-        log.info("Single: VLM detected %d plants", len(plants))
-
-        self._collect_image(image, plants, session)
-
-        for p in plants:
-            session.plants.append(PlantRecord(
-                id=str(uuid.uuid4())[:8], type=p["type"], health=p["health"],
-                bbox=p["bbox"], details=p.get("description", ""),
-                timestamp=datetime.now().isoformat(),
-            ))
-
-    # ── Strategy: sweep (PTZ grid scan) ──
-
-    async def _run_sweep(self, session: PatrolSession, sensor_data: dict = None):
-        """Grid scan: move PTZ to each position → snapshot → VLM detect → collect."""
-        if not self.ptz:
-            log.warning("Sweep requires PTZ, falling back to single")
-            return await self._run_single(session, sensor_data)
-
-        self.ptz.reset_travel()
-        positions = self.ptz.generate_scan_positions()
-        img_w, img_h = self.cfg.ptz_img_w, self.cfg.ptz_img_h
-
-        for i, (az, el, zoom) in enumerate(positions):
-            if not self._running:
-                break
-            await self.ptz.goto(az, el, zoom)
-            image = await self.ptz.snapshot()
-            if not image:
-                session.errors.append(f"Snapshot failed at position {i}")
-                continue
-
-            plants = await self.vlm.grounding_detect(image, img_w, img_h)
-            log.info("Sweep pos %d/%d (az=%d el=%d): %d plants",
-                     i + 1, len(positions), az, el, len(plants))
-
-            self._collect_image(image, plants, session)
-
-            for p in plants:
-                session.plants.append(PlantRecord(
-                    id=str(uuid.uuid4())[:8], type=p["type"], health=p["health"],
-                    bbox=p["bbox"], details=p.get("description", ""),
-                    timestamp=datetime.now().isoformat(),
-                    ptz_az=az, ptz_el=el,
-                ))
-
-        await self.ptz.go_home()
-        session.ptz_travel = self.ptz.total_travel
-
     # ── Strategy: vlm_active (panorama → focus → diagnose) ──
 
     async def _run_vlm_active(self, session: PatrolSession, sensor_data: dict = None):
         """VLM-Active: panorama → grounding → PTZ focus each plant → close-up diagnose."""
         if not self.ptz:
-            log.warning("VLM-Active requires PTZ, falling back to single")
-            return await self._run_single(session, sensor_data)
+            log.warning("VLM-Active requires PTZ, skipping")
+            session.errors.append("PTZ not configured")
+            return
 
         self.ptz.reset_travel()
         img_w, img_h = self.cfg.ptz_img_w, self.cfg.ptz_img_h
@@ -337,19 +275,15 @@ class Patrol:
             started_at=datetime.now().isoformat(),
         )
         self.session = session
+        self._running = True
 
         try:
             if annotation and annotation.get("plants"):
-                # Use pre-annotated plants from panoramic annotation
                 await self._run_from_annotation(
                     session, annotation["plants"],
                     panorama=None, sensor_data=sensor_data)
-            elif strategy == "vlm_active" and self.ptz:
-                await self._run_vlm_active(session, sensor_data)
-            elif strategy == "sweep" and self.ptz:
-                await self._run_sweep(session, sensor_data)
             else:
-                await self._run_single(session, sensor_data)
+                await self._run_vlm_active(session, sensor_data)
 
             # YOLO fast detect for comparison (if model trained)
             if self.yolo.model is not None:

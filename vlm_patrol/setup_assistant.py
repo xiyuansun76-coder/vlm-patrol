@@ -177,7 +177,7 @@ Fields:
 - ip: IP address if present, null otherwise
 - url: full URL (http/https) if present, null otherwise
 - model: model name if mentioned, null otherwise
-- action: "install"/"start"/"stop"/"test"/"status"/"vlm_active"/"sweep", null if unclear
+- action: "install"/"start"/"stop"/"test"/"status"/"vlm_active", null if unclear
 - extra: other relevant info, null if none
 
 User message: """
@@ -306,7 +306,6 @@ def _keyword_detect_intent(message: str) -> dict:
         ("test", ["test", "测试", "检查"]),
         ("status", ["status", "状态", "check"]),
         ("vlm_active", ["vlm_active", "主动", "active"]),
-        ("sweep", ["sweep", "扫描", "grid"]),
     ]:
         if any(w in msg for w in words):
             action = a
@@ -583,18 +582,8 @@ async def handle_setup_message(message: str, cfg, save_config_fn) -> str | None:
             cfg.patrol_strategy = "vlm_active"
             save_config_fn()
             return "✅ Patrol strategy set to vlm_active (panorama → focus → diagnose)"
-        if action == "sweep":
-            cfg.patrol_strategy = "sweep"
-            save_config_fn()
-            return "✅ Patrol strategy set to sweep (PTZ grid scan)"
-
         return (f"🔄 Patrol Configuration:\n"
-                f"   Strategy: {cfg.patrol_strategy}\n"
-                f"   Auto: {'on' if cfg.patrol_enabled else 'off'} (every {cfg.patrol_interval} min)\n\n"
-                f"   Available strategies:\n"
-                f"   • single — one snapshot (no PTZ needed)\n"
-                f"   • sweep — PTZ grid scan\n"
-                f"   • vlm_active — panorama → focus each plant → diagnose\n\n"
-                f"   Tell me which strategy you'd like to use.")
+                f"   Strategy: vlm_active (VLM 智能巡检)\n"
+                f"   Auto: {'on' if cfg.patrol_enabled else 'off'} (every {cfg.patrol_interval} min)")
 
     return None

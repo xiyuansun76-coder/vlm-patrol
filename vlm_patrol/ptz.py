@@ -139,39 +139,12 @@ class PTZController:
     async def snapshot(self) -> bytes | None:
         """Capture JPEG from camera via ISAPI."""
         try:
-            r = await self.client.get(self.base_url + "/ISAPI/Streaming/channels/101/picture")
+            r = await self.client.get(self.base_url + "/ISAPI/Streaming/channels/1/picture")
             if r.status_code == 200:
                 return r.content
         except Exception as e:
             log.error("PTZ snapshot failed: %s", e)
         return None
-
-    # ── Scan grid ──
-
-    def generate_scan_positions(self, cols: int = 5, rows: int = 2) -> list[tuple[int, int, int]]:
-        """
-        Generate grid scan positions around home.
-        Returns [(az, el, zoom), ...] covering the greenhouse.
-        """
-        home_az = self.cfg.ptz_home_az
-        home_el = self.cfg.ptz_home_el
-        zoom = self.cfg.ptz_wide_zoom
-        fov_h = self.cfg.ptz_fov_h
-
-        # spread positions across fov_h * cols range centered on home
-        step_az = int(fov_h * 10 * 0.8)  # 80% overlap
-        step_el = int(self.cfg.ptz_fov_v * 10 * 0.8)
-
-        start_az = home_az - (cols // 2) * step_az
-        start_el = home_el - (rows // 2) * step_el
-
-        positions = []
-        for r in range(rows):
-            for c in range(cols):
-                az = (start_az + c * step_az) % 3600
-                el = max(0, min(900, start_el + r * step_el))
-                positions.append((az, el, zoom))
-        return positions
 
     async def close(self):
         await self.client.aclose()

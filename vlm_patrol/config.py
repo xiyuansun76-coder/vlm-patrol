@@ -106,7 +106,7 @@ class Config:
         patrol = self._data.get("patrol", {})
         self.patrol_enabled = patrol.get("enabled", False)
         self.patrol_interval = patrol.get("interval_minutes", 60)
-        self.patrol_strategy = patrol.get("strategy", "single")
+        self.patrol_strategy = patrol.get("strategy", "vlm_active")
 
         # Agent
         agent = self._data.get("agent", {})

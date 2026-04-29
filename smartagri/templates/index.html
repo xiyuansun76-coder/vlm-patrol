@@ -593,11 +593,8 @@
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div><label class="text-[10px] text-neutral-500 mb-1 block">策略</label>
-              <select id="s-patrol-strategy" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-teal-500 outline-none">
-                <option value="single">single — 单次拍照</option>
-                <option value="sweep">sweep — PTZ 网格扫描</option>
-                <option value="vlm_active">vlm_active — 全景 → 聚焦 → 诊断</option>
-              </select></div>
+              <div class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-lime-400">VLM 智能巡检 (全景 → 聚焦 → 诊断)</div>
+              <input type="hidden" id="s-patrol-strategy" value="vlm_active"></div>
             <div><label class="text-[10px] text-neutral-500 mb-1 block">巡检间隔 (分钟)</label>
               <input id="s-patrol-interval" type="number" class="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-neutral-300 focus:border-teal-500 outline-none" value="30"></div>
             <div><label class="text-[10px] text-neutral-500 mb-1 block">Agent 分析间隔 (分钟)</label>
@@ -791,11 +788,7 @@
 
       <!-- Controls -->
       <div class="flex items-center gap-3 flex-wrap">
-        <select id="patrol-strategy" class="bg-surface-container-high/40 border border-outline-variant/20 rounded-lg px-3 py-2 text-xs font-mono text-on-surface">
-          <option value="vlm_active">VLM 智能巡检</option>
-          <option value="fixed_route">固定路线巡检</option>
-          <option value="random">随机采样巡检</option>
-        </select>
+<!-- strategy is always vlm_active -->
         <button onclick="patrolStart()" id="patrol-btn-start" class="flex items-center gap-2 px-4 py-2 rounded-lg border border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 transition-all font-headline text-xs uppercase tracking-widest">
           <span class="material-symbols-outlined" style="font-size:16px">play_arrow</span>
           开始巡检
@@ -838,19 +831,24 @@
             <select id="pano-history-sel" class="bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-[10px] text-neutral-400 font-mono" onchange="panoLoadHistory(this.value)">
               <option value="">-- 历史标注 --</option>
             </select>
+            <button onclick="panoDeleteHistory()" id="pano-btn-del-history" class="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all text-[10px] font-mono">
+              <span class="material-symbols-outlined" style="font-size:12px">delete</span>删除
+            </button>
           </div>
           <!-- Canvas area -->
+          <div id="pano-class-picker" class="hidden flex items-center gap-2 flex-wrap px-3 py-2 rounded-lg bg-surface-container/60 border border-outline-variant/10 mb-2">
+            <span class="text-[10px] text-neutral-400 font-mono shrink-0">选择类别:</span>
+            <div id="pano-class-btns" class="flex gap-1.5 flex-wrap"></div>
+            <button onclick="document.getElementById('pano-class-picker').classList.add('hidden')" class="text-neutral-500 hover:text-white ml-auto"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>
+          </div>
           <div class="relative bg-black rounded-xl overflow-hidden" style="aspect-ratio:16/9">
             <canvas id="pano-canvas" class="w-full h-full cursor-crosshair" style="display:none"></canvas>
+            
             <div id="pano-placeholder" class="absolute inset-0 flex items-center justify-center text-neutral-600 text-xs font-mono">
               点击"拍摄并标注"获取全景 VLM 检测结果
             </div>
           </div>
-          <!-- Class selector for new/edit -->
-          <div id="pano-class-picker" class="hidden flex items-center gap-2 flex-wrap">
-            <span class="text-[10px] text-neutral-500 font-headline uppercase">选择类别:</span>
-            <div id="pano-class-btns" class="flex gap-1 flex-wrap"></div>
-          </div>
+          
           <!-- Label list -->
           <div id="pano-labels" class="space-y-1"></div>
         </div>
@@ -1994,7 +1992,7 @@ let patrolPollTimer = null;
 let patrolPlantsData = [];
 
 async function patrolStart() {
-  const strategy = document.getElementById('patrol-strategy').value;
+  const strategy = 'vlm_active';
   document.getElementById('patrol-btn-start').disabled = true;
   document.getElementById('patrol-btn-stop').disabled = false;
   document.getElementById('patrol-btn-stop').classList.remove('opacity-40');
@@ -2122,20 +2120,20 @@ async function loadPatrolHistory() {
     const r = await fetch('/api/patrol/history');
     const sessions = await r.json();
     if (!sessions.length) { el.innerHTML = '<div class="text-neutral-600 text-xs">暂无记录</div>'; return; }
-    const strategyNames = {vlm_active:'VLM智能', fixed_route:'固定路线', random:'随机采样'};
-    el.innerHTML = sessions.map(s => `
-      <div class="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-container/40 border border-outline-variant/5">
-        <span class="text-[10px] font-headline uppercase tracking-widest px-2 py-0.5 rounded-full border ${
-          s.strategy==='vlm_active' ? 'border-lime-500/30 text-lime-400' :
-          s.strategy==='fixed_route' ? 'border-cyan-500/30 text-cyan-400' :
-          'border-yellow-500/30 text-yellow-400'
-        }">${strategyNames[s.strategy] || s.strategy}</span>
-        <span class="text-xs text-neutral-400 font-mono">${s.start_time || '--'}</span>
-        <span class="text-xs text-neutral-500">发现 <strong class="text-lime-400">${s.overview_plants}</strong> → 确认 <strong class="text-cyan-400">${s.confirmed_plants}</strong></span>
-        <span class="text-[10px] text-neutral-600 ml-auto">${s.duration_s ? (s.duration_s/60).toFixed(1)+'min' : '--'} · PTZ ${(s.ptz_travel_deg||0).toFixed(0)}°</span>
-        <span class="text-[10px] px-2 py-0.5 rounded-full ${s.status==='complete' ? 'bg-lime-500/15 text-lime-400' : 'bg-yellow-500/15 text-yellow-400'}">${s.status==='complete'?'完成':'进行中'}</span>
-      </div>
-    `).join('');
+    el.innerHTML = sessions.slice().reverse().map(s => {
+      const t = s.started_at ? new Date(s.started_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '--';
+      const nPlants = (s.plants||[]).length;
+      const done = s.status==='completed' || s.status==='complete';
+      const sJson = JSON.stringify(s).replace(/'/g, '\\x27');
+      return `
+      <div class="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-container/40 border border-outline-variant/5 cursor-pointer hover:bg-white/5 transition-colors" onclick='showPatrolReport(${sJson})'>
+        <span class="text-[10px] font-headline uppercase tracking-widest px-2 py-0.5 rounded-full border border-lime-500/30 text-lime-400">VLM智能</span>
+        <span class="text-xs text-neutral-400 font-mono">${t}</span>
+        <span class="text-xs text-neutral-500">发现 <strong class="text-lime-400">${nPlants}</strong> 株 · 采集 <strong class="text-cyan-400">${s.images_collected||0}</strong> 张</span>
+        <span class="text-[10px] text-neutral-600 ml-auto">PTZ ${(s.ptz_travel||0).toFixed(0)}°</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full ${done ? 'bg-lime-500/15 text-lime-400' : 'bg-yellow-500/15 text-yellow-400'}">${done?'完成':'进行中'}</span>
+      </div>`;
+    }).join('');
   } catch(e) {
     el.innerHTML = `<div class="text-red-400 text-xs">加载失败: ${e.message}</div>`;
   }
@@ -2479,7 +2477,8 @@ function panoRender() {
 function panoRenderLabels() {
   const el = document.getElementById('pano-labels');
   if (!panoData || !panoData.plants.length) { el.innerHTML = '<div class="text-neutral-600 text-[10px]">暂无标注</div>'; return; }
-  el.innerHTML = panoData.plants.map((p,i) => {
+  const header = '<div class="flex items-center justify-between mb-1"><span class="text-[10px] text-neutral-500 font-mono">' + panoData.plants.length + ' 个标注</span><button onclick="panoClearAll()" class="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-[10px] font-mono">全部删除</button></div>';
+  el.innerHTML = header + panoData.plants.map((p,i) => {
     const cls_id = panoData.classes ? panoData.classes.indexOf(p.type) : i;
     const color = panoColor(cls_id >= 0 ? cls_id : i);
     const sel = i === panoSelectedIdx ? 'border-white/30' : 'border-outline-variant/10';
@@ -2488,9 +2487,7 @@ function panoRenderLabels() {
       <span class="text-xs text-neutral-300 font-mono flex-1">${p.type}</span>
       <span class="text-[10px] text-neutral-600 font-mono">${(p.confidence||0).toFixed(2)}</span>
       <span class="text-[10px] text-neutral-600 font-mono">[${p.bbox.map(v=>Math.round(v)).join(',')}]</span>
-      <button onclick="event.stopPropagation();panoDeleteLabel(${i})" class="text-red-400/50 hover:text-red-400 transition-colors">
-        <span class="material-symbols-outlined" style="font-size:14px">close</span>
-      </button>
+      <button onclick="event.stopPropagation();panoDeleteLabel(${i})" class="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all text-[10px] font-mono">删除</button>
     </div>`;
   }).join('');
 }
@@ -2506,6 +2503,15 @@ function panoDeleteLabel(idx) {
   if (panoSelectedIdx >= panoData.plants.length) panoSelectedIdx = -1;
   panoRender(); panoRenderLabels();
   document.getElementById('pano-status').textContent = '已删除标注';
+}
+
+function panoClearAll() {
+  if (!panoData) return;
+  if (!confirm('确定删除所有标注？')) return;
+  panoData.plants = [];
+  panoSelectedIdx = -1;
+  panoRender(); panoRenderLabels();
+  document.getElementById('pano-status').textContent = '已清空所有标注';
 }
 
 function panoAddBox() {
@@ -2613,6 +2619,24 @@ async function panoLoadHistory(id) {
     };
     img.src = `/api/annotation/${id}/image`;
   } catch(e) { document.getElementById('pano-status').textContent = '加载失败'; }
+}
+
+async function panoDeleteHistory() {
+  const sel = document.getElementById('pano-history-sel');
+  const id = sel.value;
+  if (!id) { alert('请先选择要删除的历史标注'); return; }
+  const opt = sel.options[sel.selectedIndex];
+  if (!confirm('确定删除标注记录 ' + opt.text + '？')) return;
+  try {
+    await fetch('/api/annotation/' + id, {method:'DELETE'});
+    document.getElementById('pano-status').textContent = '已删除';
+    sel.value = '';
+    panoData = null;
+    panoRender(); panoRenderLabels();
+    panoLoadHistoryList();
+  } catch(e) {
+    document.getElementById('pano-status').textContent = '删除失败';
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2827,5 +2851,101 @@ panoLoadHistoryList();
 setInterval(refreshDevices, 10000);
 setInterval(refreshCamera,  30000);
 </script>
+
+    <!-- Patrol Report Modal -->
+    <div id="patrol-report-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden" style="display:none" onclick="if(event.target===this){this.classList.add('hidden');this.style.display='none'}">
+      <div class="flex items-center justify-center w-full h-full p-4">
+      <div class="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 space-y-4">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-lime-400" style="font-size:24px">summarize</span>
+          <div>
+            <div class="font-headline font-bold text-lg tracking-tight">巡检报告</div>
+            <div id="report-meta" class="text-[10px] text-neutral-500 font-mono"></div>
+          </div>
+          <button onclick="document.getElementById('patrol-report-modal').classList.add('hidden');document.getElementById('patrol-report-modal').style.display='none'" class="ml-auto text-neutral-500 hover:text-white">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="grid grid-cols-4 gap-3">
+          <div class="bg-neutral-800 rounded-xl p-3 text-center">
+            <div id="report-plant-count" class="text-2xl font-bold text-lime-400">0</div>
+            <div class="text-[10px] text-neutral-500">发现植物</div>
+          </div>
+          <div class="bg-neutral-800 rounded-xl p-3 text-center">
+            <div id="report-img-count" class="text-2xl font-bold text-cyan-400">0</div>
+            <div class="text-[10px] text-neutral-500">采集图片</div>
+          </div>
+          <div class="bg-neutral-800 rounded-xl p-3 text-center">
+            <div id="report-healthy" class="text-2xl font-bold text-green-400">0</div>
+            <div class="text-[10px] text-neutral-500">健康</div>
+          </div>
+          <div class="bg-neutral-800 rounded-xl p-3 text-center">
+            <div id="report-ptz" class="text-2xl font-bold text-amber-400">0</div>
+            <div class="text-[10px] text-neutral-500">PTZ行程</div>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div class="text-xs text-neutral-400 font-headline uppercase tracking-widest">逐株诊断详情</div>
+          <div id="report-plants" class="space-y-2"></div>
+        </div>
+        <div id="report-errors-section" class="hidden space-y-2">
+          <div class="text-xs text-red-400 font-headline uppercase tracking-widest">错误</div>
+          <div id="report-errors" class="text-xs text-red-300"></div>
+        </div>
+      </div>
+      </div>
+    </div>
+
+<script>
+function showPatrolReport(s) {
+  const modal = document.getElementById('patrol-report-modal');
+  const t = s.started_at ? new Date(s.started_at).toLocaleString('zh-CN') : '--';
+  const done = s.status==='completed' || s.status==='complete';
+  document.getElementById('report-meta').textContent = t + ' · ' + (done?'已完成':'进行中') + ' · ID: ' + (s.session_id||'--');
+  document.getElementById('report-plant-count').textContent = (s.plants||[]).length;
+  document.getElementById('report-img-count').textContent = s.images_collected || 0;
+  const healthy = (s.plants||[]).filter(function(p){return p.health==='healthy'}).length;
+  document.getElementById('report-healthy').textContent = healthy;
+  document.getElementById('report-healthy').className = 'text-2xl font-bold ' + (healthy===(s.plants||[]).length ? 'text-green-400' : 'text-yellow-400');
+  document.getElementById('report-ptz').textContent = (s.ptz_travel||0).toFixed(0) + String.fromCharCode(176);
+
+  var classNames = {tomato:'番茄',lettuce:'生菜',strawberry:'草莓',coriander:'香菜',blueberry:'蓝莓',celery:'芹菜'};
+  var plantsEl = document.getElementById('report-plants');
+  plantsEl.innerHTML = (s.plants||[]).map(function(p, i) {
+    var hColor = p.health==='healthy' ? 'text-green-400' : 'text-yellow-400';
+    var hIcon = p.health==='healthy' ? 'check_circle' : 'warning';
+    var cn = classNames[p.type] || p.type;
+    return '<div class="bg-neutral-800/60 rounded-xl p-3 flex items-start gap-3">' +
+      '<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-lime-500/10 flex items-center justify-center">' +
+        '<span class="text-lime-400 font-bold text-sm">' + (i+1) + '</span>' +
+      '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-center gap-2 flex-wrap">' +
+          '<span class="font-bold text-sm text-neutral-200">' + cn + '</span>' +
+          '<span class="text-[10px] text-neutral-500 font-mono">' + p.type + '</span>' +
+          '<span class="material-symbols-outlined ' + hColor + '" style="font-size:14px;font-variation-settings:' + "'FILL' 1" + '">' + hIcon + '</span>' +
+          '<span class="text-[10px] ' + hColor + '">' + (p.health==='healthy'?'健康':'异常') + '</span>' +
+          (p.confidence ? '<span class="text-[10px] text-neutral-600 ml-auto">' + (p.confidence*100).toFixed(0) + '%</span>' : '') +
+        '</div>' +
+        (p.details ? '<div class="text-[11px] text-neutral-400 mt-1 leading-relaxed">' + p.details + '</div>' : '') +
+        '<div class="text-[10px] text-neutral-600 mt-1 font-mono">PTZ(' + (p.ptz_az||0) + ', ' + (p.ptz_el||0) + ')</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var errSection = document.getElementById('report-errors-section');
+  var errEl = document.getElementById('report-errors');
+  if (s.errors && s.errors.length) {
+    errSection.classList.remove('hidden');
+    errEl.innerHTML = s.errors.map(function(e){return '<div>' + String.fromCharCode(8226) + ' ' + e + '</div>'}).join('');
+  } else {
+    errSection.classList.add('hidden');
+  }
+
+  modal.classList.remove('hidden');
+  modal.style.display = 'block';
+}
+</script>
+
 </body>
 </html>

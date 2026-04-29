@@ -9,6 +9,8 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Request, Form, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
+import hashlib
+import hmac
 import httpx
 import uvicorn
 
@@ -18,6 +20,8 @@ from vlm_patrol.yolo import YOLOManager
 from vlm_patrol.patrol import Patrol
 from vlm_patrol.agent import Agent
 from vlm_patrol.setup_assistant import handle_setup_message
+
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 log = logging.getLogger("vlm-patrol")
@@ -43,12 +47,10 @@ app = FastAPI(title="VLM-Patrol", version="0.1.0")
 templates_dir = Path(__file__).parent / "smartagri" / "templates"
 
 # Login config from env
-import os
 _LOGIN_USER = os.environ.get("SMARTAGRI_USER", "admin")
 _LOGIN_PASS = os.environ.get("SMARTAGRI_PASS", "admin")
 _SESSION_SECRET = os.environ.get("SMARTAGRI_SESSION_SECRET", "vlm-patrol-session")
 
-import hmac, hashlib
 _SESSION_TOKEN = hmac.new(
     _SESSION_SECRET.encode(), b"authenticated", hashlib.sha256
 ).hexdigest()
@@ -935,7 +937,7 @@ def _start_mqtt():
         sub_topics.add("#")  # subscribe to all if no specific topic
 
     def on_connect(client, userdata, flags, rc, properties=None):
-        log.info("MQTT connected to %s:%d (rc=%d)", broker, port, rc)
+        log.info("MQTT connected to %s:%d (rc=%s)", broker, port, rc)
         for t in sub_topics:
             client.subscribe(t)
             log.info("MQTT subscribed: %s", t)
